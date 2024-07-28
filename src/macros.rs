@@ -286,14 +286,18 @@ macro_rules! lisp {
 macro_rules! internal_lisp {
 
     // Evaluate symbol in environment
-    (stack: [$($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
         macro_rules! evaluate_in_env {
             $(
-                ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(stack: [$val $stack] env: $env control: $control dump: $dump)};
+                ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(@fix stack: $val [$stack] env: $env control: $control dump: $dump)};
             )*
             ($not_found:ident) => {error!("val not found in environment")}
         };
-        evaluate_in_env!($symb, $($stack)*, [$($key : $val )*], [$($rest)*])
+        evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*])
+    };
+    (@fix stack: $top:tt [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$($rest:tt)*] dump: $dump:tt) => { //needed to avoid some fuckery in the first statement
+        // internal_lisp!(stack: [$top $($stack_entries)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)
+        println!("{}", stringify!($top));
     };
     // (stack: [$($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
     //     macro_rules! evaluate_in_env {
@@ -340,6 +344,7 @@ fn stack_lisp_test() {
     println!("{hello}");
     let hello = stack_lisp_v1!((QUOTE (QUOTE (hello))) [] []);
     println!("{hello}");
+    internal_lisp!(stack: [nil garbo] env: [a: b] control: [a] dump: []);
 }
 
 // possible: have some kind of wanky recursive macro that doesn't rely on actually recursively calling macros inside macros

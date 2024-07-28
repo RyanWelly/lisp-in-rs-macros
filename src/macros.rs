@@ -280,12 +280,51 @@ macro_rules! lisp {
 // ((IF X CONS CAR) (QUOTE (x y))) is immediate ub if X is truthy. We do check the number of args being given straight to a primitive though
 // eg (CONS x y z) will result in an error
 
-//optimisation; maybe write dump: $d:tt instead of [$($dumps:tt)+])
+// instances of undefined behavior:
+// - assigning a special form to a variable (if, quote, etc)
+// - using the wrong number of arguments to a function
 
 //a thing to consider; how to handle dotted lists? maybe convert all lists of the form (x y z) into (x y z nil) etc. Or introduce {a b c} === (a b . c)
 macro_rules! internal_lisp {
 
-    // Evaluate symbol in environment
+    // Evaluate primitives/special forms
+    // for primitives, when you encounter the primitive CONS, the @CONS token gets put on the stack (to differentiate between CONS as data and CONS as proc).
+    // we do it this way instead of just scanning for `CONS ap`` in the control so that (define f CONS) (f 'a 'b) has the intended effect.
+    // maybe do something to stop people doing (quote @CONS), like use {CONS} and specialise on QUOTE to stop anyone doing (QUOTE {$t:tt})?
+    // or for thematic consistency, do a similar format to closures and use [CONS]
+
+    //QUOTE
+    (stack: [$($stack_entries:tt)*] env: $env:tt control: [(QUOTE $x:tt)$($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [$x $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+    };
+
+    //pop primitives onto the stack as procs
+    (stack: [($($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [@CAR $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+    };
+
+    (stack: [($($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [CDR $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [@CDR $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+    };
+    (stack: [($($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ATOM $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [@ATOM $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+    };
+    // CAR takes a list off the top of the stack, and returns its car.
+    // (CAR (x y z)) == x
+    (stack: [@CAR ($car:tt $($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [$car $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+    };
+
+
+
+    // Create closure from lambda
+
+
+    // Split list into stack (CAR X) => X::CAR::ap
+
+
+
+    // Evaluate symbol in environment - Rule 1 in notes
     (stack: [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
         macro_rules! evaluate_in_env {
             $(
@@ -293,11 +332,11 @@ macro_rules! internal_lisp {
             )*
             ($not_found:ident) => {error!("val not found in environment")}
         };
-        evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*])
+        evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*]) // we do this cursed expansion here so we can pass the entire $($rest)* capture groups along, instead of repeating one by one.
     };
-    (@fix stack: $top:tt [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$($rest:tt)*] dump: $dump:tt) => { //needed to avoid some fuckery in the first statement
+    (@fix stack: $top:tt [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$($rest:tt)*] dump: $dump:tt) => { //needed to avoid some fuckery in the first statement, fixes up the formatting.
         // internal_lisp!(stack: [$top $($stack_entries)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)
-        println!("{}", stringify!($top));
+        println!("{}", stringify!($top)); //for debugging purposes only
     };
     // (stack: [$($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
     //     macro_rules! evaluate_in_env {
@@ -344,7 +383,7 @@ fn stack_lisp_test() {
     println!("{hello}");
     let hello = stack_lisp_v1!((QUOTE (QUOTE (hello))) [] []);
     println!("{hello}");
-    internal_lisp!(stack: [nil garbo] env: [a: b] control: [a] dump: []);
+    internal_lisp!(stack: [random nonsense] env: [a: (A B)] control: [a] dump: []);
 }
 
 // possible: have some kind of wanky recursive macro that doesn't rely on actually recursively calling macros inside macros

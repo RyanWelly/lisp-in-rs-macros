@@ -216,38 +216,40 @@ macro_rules! with_evaled {
 // for eq, instead of expanding a macro above and using the macro inside, I can instead branch the whole thing inside a macro.
 // maybe use https://veykril.github.io/tlborm/decl-macros/patterns/tt-bundling.html instead of having $($token_tree:tt)* everywhere
 
+//can use lambda for most things except for quote https://news.ycombinator.com/item?id=8715655
+
 //first iteration: only has instructions which accept a single argument
 
-macro_rules! stack_lisp {
+macro_rules! stack_lisp_v1 {
 
 
     // use another macro as top level ie
     // macro_rules! lisp {($($sexprs:tt)* ) => stack_lisp!($($sexprs)* [] [])}
     // maybe split up parsing, executing into different macros?
 
-    ( (ATOM $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp!( $toks [ATOM $($operands)*] [$($data)*])};
-    ( (QUOTE $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp!( [QUOTE $($operands)*] [$toks $($data)*])}; //just puts the rest of the args onto the data stack (is this right???)
-    ( (CAR $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp!( $toks [CAR $($operands)*] [$($data)*])};
-    ( (CDR $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp!( $toks [CDR $($operands)*] [$($data)*])};
+    ( (ATOM $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v1!( $toks [ATOM $($operands)*] [$($data)*])};
+    ( (QUOTE $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v1!( [$($operands)*] [$toks $($data)*])}; //just puts the rest of the args onto the data stack (is this right???)
+    ( (CAR $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v1!( $toks [CAR $($operands)*] [$($data)*])};
+    ( (CDR $toks:tt) [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v1!( $toks [CDR $($operands)*] [$($data)*])};
 
-    ( $toks:tt [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [$toks $($data)*])};
-    ( [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [$($data)*])};
+    ( $val:ident [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v1!( [ $($operands)*] [$val $($data)*])}; //need to figure out how to do this in the presence of variable bindings. Maybe don't need two stacks?
+    ( $toks:tt [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [$toks $($data)*])};
+    ( [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [$($data)*])};
 
 
-    (@eval [QUOTE $($operands:tt)*] [ $quoted:tt $($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [ $quoted $($data)*])};
 
     // ATOM operation
-    (@eval [ATOM $($operands:tt)*] [ $atom:ident $($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [ TRUE $($data)*])};
-    (@eval [ATOM $($operands:tt)*] [ $list:tt $($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [ NIL $($data)*])};
+    (@eval [ATOM $($operands:tt)*] [ $atom:ident $($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [ TRUE $($data)*])};
+    (@eval [ATOM $($operands:tt)*] [ $list:tt $($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [ NIL $($data)*])};
 
     // CAR operation
-    (@eval [CAR $($operands:tt)*] [ ($list:tt) $($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [ $list $($data)*])};              // (car (list)) = list
-    (@eval [CAR $($operands:tt)*] [ ($list:tt $($rest:tt)*) $($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [ $list $($data)*])}; // (car(list ....)) = list
+    (@eval [CAR $($operands:tt)*] [ ($list:tt) $($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [ $list $($data)*])};              // (car (list)) = list
+    (@eval [CAR $($operands:tt)*] [ ($list:tt $($rest:tt)*) $($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [ $list $($data)*])}; // (car(list ....)) = list
 
-    // // CDR operation
-    // (@eval [CDR $($operands:tt)*] [ ($list:tt) $($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [ NIL $($data)*])};                // (cdr (list)) = nil
-    // (@eval [CDR $($operands:tt)*] [ ($list:tt $($rest:tt)*) $($data:tt)*]) => {stack_lisp!(@eval [$($operands)*] [ $($operand)* $($data)*])}; // (cdr (list ....)) = ....
-    // (@eval [CDR $($operands:tt)*] [ $invalid:ident $($data:tt)*]) => {"error: cdr cannot be called on atoms"};
+    // CDR operation
+    (@eval [CDR $($operands:tt)*] [ ($list:tt) $($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [ NIL $($data)*])};                // (cdr (list)) = nil
+    (@eval [CDR $($operands:tt)*] [ ($list:tt $($rest:tt)*) $($data:tt)*]) => {stack_lisp_v1!(@eval [$($operands)*] [ $($operand)* $($data)*])}; // (cdr (list ....)) = ....
+    (@eval [CDR $($operands:tt)*] [ $invalid:ident $($data:tt)*]) => {"error: cdr cannot be called on atoms"};
 
 
     // CONS operation (not implemented yet)
@@ -260,15 +262,83 @@ macro_rules! stack_lisp {
 
 }
 
-macro_rules! single_stack {
-    () => {};
+//TODO: change the stacks to be something other than open and closed brackets, otherwise $($rest:tt)* will be too greedy.
+// might need something to denote whether we're consuming arguments, to ensure our stack_lisp macro is only consuming a single lisp expression.
+macro_rules! stack_lisp_v2 {
+    ( (ATOM $toks:tt) $($rest:tt)* @ $($operands:tt)* @ [$($data:tt)*]) => {stack_lisp_v2!( $toks $($rest)* @ATOM $($operands)*@ [$($data)*])};
+    ( (QUOTE $toks:tt) $($rest:tt)* @$($operands:tt)*@ [$($data:tt)*]) => {stack_lisp_v1!( $($rest:tt)* @$($operands)*@ [$toks $($data)*])};
+
+    ( $val:ident $($rest:tt)* [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v2!($($rest:tt)* [ $($operands)*] [$val $($data)*])}; //need to figure out how to do this in the presence of variable bindings. Maybe don't need two stacks?
+    ( $toks:tt [$($operands:tt)*] [$($data:tt)*]) => {stack_lisp_v2!(@eval [$($operands)*] [$toks $($data)*])};
+}
+
+macro_rules! lisp {
+    ($($toks:tt)+) => {internal_lisp!(stack: [] env: []  control: ($($toks)+)  dump: [] )};
+}
+
+// also ahhhhhh calling a function with the wrong number of elements is undefined behaviour in our scheme
+// ((IF X CONS CAR) (QUOTE (x y))) is immediate ub if X is truthy. We do check the number of args being given straight to a primitive though
+// eg (CONS x y z) will result in an error
+
+//optimisation; maybe write dump: $d:tt instead of [$($dumps:tt)+])
+
+//a thing to consider; how to handle dotted lists? maybe convert all lists of the form (x y z) into (x y z nil) etc. Or introduce {a b c} === (a b . c)
+macro_rules! internal_lisp {
+
+    // Evaluate symbol in environment
+    (stack: [$($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
+        macro_rules! evaluate_in_env {
+            $(
+                ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(stack: [$val $stack] env: $env control: $control dump: $dump)};
+            )*
+            ($not_found:ident) => {error!("val not found in environment")}
+        };
+        evaluate_in_env!($symb, $($stack)*, [$($key : $val )*], [$($rest)*])
+    };
+    // (stack: [$($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
+    //     macro_rules! evaluate_in_env {
+    //         $(
+    //             ($key) => {internal_lisp!(stack: [$val $($stack)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)};
+    //         )*
+    //         ($not_found:ident) => {error!("val not found in environment")}
+    //     }
+    //     evaluate_in_env!($symb)
+    // };
+
+
+    (stack: [$top:tt $($rest:tt)*] env: [$($envs:tt)*] control: [] dump: []  ) => {
+        stringify!($top)
+    }; //Rule 6: termination
+}
+
+// either causes a compiler error with the error message, or evalutes program to a string of the error message
+macro_rules! error {
+    ($($toks:tt)*) => {println!("{}", stringify!($($toks)*))}; // program evaluates to a single print statement with the error message
+    ($($toks:tt)+) => {compile_error!(concat!("Lisp execution failure: ", stringify!($($toks)+)))}; //program halts rust compilation with the error message
+
+}
+
+// we store an environment as an association list ([var_name_1: val, var_name_2: other_val])
+// to retrieve a value, we create an inner macro with an arm for each key
+macro_rules! env_test {
+    ($arg:ident [$($var_binding:ident : $exp:tt),*]) => {
+        macro_rules! inner_test {
+            $(
+            ($var_binding) => {$exp};
+            )*
+            ($not_found:ident) => {error!("couldn't find value in env ")}; // maybe use concat to include some debug info
+        }
+        inner_test!($arg)
+    }
 }
 
 #[test]
 fn stack_lisp_test() {
-    let hello = stack_lisp!((ATOM (QUOTE hello)) [] []);
+    let hello = stack_lisp_v1!((ATOM (QUOTE hello)) [] []);
     println!("{hello}");
-    let hello = stack_lisp!((CAR (QUOTE (hello))) [] []);
+    let hello = stack_lisp_v1!((CDR (QUOTE (hello))) [] []);
+    println!("{hello}");
+    let hello = stack_lisp_v1!((QUOTE (QUOTE (hello))) [] []);
     println!("{hello}");
 }
 

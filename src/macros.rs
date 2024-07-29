@@ -293,31 +293,75 @@ macro_rules! internal_lisp {
     // maybe do something to stop people doing (quote @CONS), like use {CONS} and specialise on QUOTE to stop anyone doing (QUOTE {$t:tt})?
     // or for thematic consistency, do a similar format to closures and use [CONS]
 
-    //QUOTE
+    // QUOTE special form
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [(QUOTE $x:tt)$($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [$x $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+        internal_lisp!(stack: [$x $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
-    //pop primitives onto the stack as procs
-    (stack: [($($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@CAR $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+
+
+    // LAMBDA special form
+    (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($name:ident) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [[$name, $T, $env] $($stacks)*] env: $env control: [$($controls:tt)*] dump: $dump)
     };
 
-    (stack: [($($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [CDR $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@CDR $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+
+    // IF special form
+
+    // (t1 t2) => t2::t1::ap
+    // figure out a nice way to extend this to more args automatically
+    (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [$x $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
     };
-    (stack: [($($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ATOM $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@ATOM $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+
+    // pop primitives onto the stack as procs
+    (stack: [$($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [@CAR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
+
+    (stack: [$($stack_entries:tt)*] env: $env:tt control: [CDR $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [@CDR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    (stack: [$($stack_entries:tt)*] env: $env:tt control: [ATOM $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [@ATOM $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    (stack: [$($stack_entries:tt)*] env: $env:tt control: [DISPLAY $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [@DISPLAY $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+
+
+    // Evaluate primitives
+
+
     // CAR takes a list off the top of the stack, and returns its car.
     // (CAR (x y z)) == x
     (stack: [@CAR ($car:tt $($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [$car $($stack_entries)*] env: $env control: [$($rest:tt)*] dump: $dump)
+        internal_lisp!(stack: [$car $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    (stack: [@CDR ($car:tt) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [NIL $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    (stack: [@CDR ($car:tt $($cdrs:tt)* ) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [($($cdrs)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    (stack: [@DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+        println!("{}", stringify!($val));
+        internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+    };
+
+    (stack: [[$var:ident, ] $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+        println!("{}", stringify!($val));
+        internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+    };
+
+
+    // evalute closure
+    (stack: [ [$x:ident, $T:tt, ] $($stacks:tt)*]) => {
+
     };
 
 
 
-    // Create closure from lambda
 
 
     // Split list into stack (CAR X) => X::CAR::ap
@@ -384,10 +428,14 @@ fn stack_lisp_test() {
     let hello = stack_lisp_v1!((QUOTE (QUOTE (hello))) [] []);
     println!("{hello}");
     internal_lisp!(stack: [random nonsense] env: [a: (A B)] control: [a] dump: []);
+    dbg!(internal_lisp!(stack: [] env: [] control: [(CDR (QUOTE (X Y)))] dump: []));
 }
 
-// possible: have some kind of wanky recursive macro that doesn't rely on actually recursively calling macros inside macros
+// Desription of my lisp:
 
-//lisp!(.. s-expressions .., x)
-// x is some s-expression, either evaluate (if simple) or expand somehow to the right
-// carry some kind of env state? think about this a little more
+// a simple LISP with lexical scoping, implemented fully in the Rust macro system.
+// Avaliable primitives: atom, if, eq, cons, car, cdr, lambda with a single argument, display
+// hopefully soon: lambda with arbitary arguments, eval primitive, define primitive.
+// maybe add macros?
+// for proof of concept, write a meta circular interpreter (ie just steal Graham's).
+// check if this is lexical https://stackoverflow.com/questions/32344615/program-to-check-if-the-scoping-is-lexical-or-dynamic, I believe it is

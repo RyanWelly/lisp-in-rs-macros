@@ -330,7 +330,7 @@ macro_rules! internal_lisp {
     };
 
 
-    // Evaluate primitives
+    // Evaluate primitives - top of the stack
 
 
     // CAR takes a list off the top of the stack, and returns its car.
@@ -349,16 +349,16 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
-    (stack: [[$var:ident, ] $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
-        println!("{}", stringify!($val));
-        internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+
+    // pop closure from the top of the stack, and the closure's variable is mapped to the value.
+    // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
+    (stack: [[$var:ident, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
+        internal_lisp!(stack: [] env: [$var:$v $($key:value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*])])
     };
 
+    // done processing the current closure, pop stack/env/control of the dump and continue evaluating
 
-    // evalute closure
-    (stack: [ [$x:ident, $T:tt, ] $($stacks:tt)*]) => {
 
-    };
 
 
 
@@ -417,6 +417,54 @@ macro_rules! env_test {
         }
         inner_test!($arg)
     }
+}
+
+// l => left is hole
+// r => right is hole
+// if a binding of variable is not found in env, just return itself.
+// lisp style syntax, (\x. x) and ((\y. x)(\x. x)) is valid ony with the outside parens.
+// (LAMBDA (X) T)
+macro_rules! cek {
+
+    //operate on raw lambda term
+    (@ $x:ident, {$($key:ident : $val:tt)*}, $k:tt) => { // map to env
+        {
+        macro_rules! consult_env {
+            $(
+                ($key) => {cek!(@ $k, $val)};
+            )*
+            ($x) => {cek!(@ $k,$x)}; //if not in enviroment, we just evaluate it to itself so that ie (\x.y)x -> y
+        }
+        consult_env!($x)
+        }
+    };
+    (@ (LAMBDA ($x:ident) $arg:tt), $env:tt, $k:tt) => { //handles expressions like (LAMBDA (x) T)
+        cek!(@ $k, [$x, $arg, $env])
+    };
+    (@ ($t1:tt $t2:tt), $env:tt, $k:tt) => { //application case; handles expressions like ((LAMBDA (x) y) z) -> y
+        cek!(@ $t1, $env, (arg: $t2, $env, $k))
+    };
+
+    //operate on values
+    (@ (arg: $t:tt, $env:tt, $k:tt), $v:tt) => {
+        cek!(@ $t, $env, (fun: $v, $k))
+    };
+    (@ (fun: [$x:ident, $t:tt, {$($key:ident : $val:tt)*}], $k:tt), $v:tt) => {
+        cek!(@ $t, {$x : $v $($key:$val)*}, $k)
+    };
+    (@ stop, $v:tt) => {stringify!($v)}
+}
+
+macro_rules! cek_call {
+    ($($terms:tt)*) => {
+        cek!( @ $($terms)* , {}, stop)
+    };
+}
+
+#[test]
+fn cek_test() {
+    let single_var = cek_call!(x);
+    let single_lamba = dbg!(cek_call!(((LAMBDA (x) y) x )  ));
 }
 
 #[test]

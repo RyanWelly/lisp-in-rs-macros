@@ -300,18 +300,19 @@ macro_rules! internal_lisp {
 
 
 
-    // LAMBDA special form
+    // LAMBDA special form - saves closure onto stack with current env
     (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($name:ident) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [[$name, $T, $env] $($stacks)*] env: $env control: [$($controls:tt)*] dump: $dump)
+        internal_lisp!(stack: [[$name, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
 
     // IF special form
+    // (IF exp a1 a2) => exp:: (IFS a1 a2) and IFS branches based on the truthiness of the top value on stack (the evaluated exp).
 
     // (t1 t2) => t2::t1::ap
     // figure out a nice way to extend this to more args automatically
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [$x $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
+        internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
     };
 
     // pop primitives onto the stack as procs
@@ -345,20 +346,20 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [($($cdrs)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [@DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
-        println!("{}", stringify!($val));
-        internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+        {println!("{}", stringify!($val));
+        internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
 
 
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
     // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
     (stack: [[$var:ident, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-        internal_lisp!(stack: [] env: [$var:$v $($key:value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*])])
+        internal_lisp!(stack: [] env: [$var:$v $($key:value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
 
     // done processing the current closure, pop stack/env/control of the dump and continue evaluating
 
-
+    // (stack:[$val:tt $($stack_entries:tt)*] env: $env:tt control: [] dump: []  ) => {};
 
 
 
@@ -370,17 +371,17 @@ macro_rules! internal_lisp {
 
     // Evaluate symbol in environment - Rule 1 in notes
     (stack: [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
-        macro_rules! evaluate_in_env {
+        {macro_rules! evaluate_in_env {
             $(
                 ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(@fix stack: $val [$stack] env: $env control: $control dump: $dump)};
             )*
             ($not_found:ident) => {error!("val not found in environment")}
-        };
-        evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*]) // we do this cursed expansion here so we can pass the entire $($rest)* capture groups along, instead of repeating one by one.
+        }
+        evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*]) } // we do this cursed expansion here so we can pass the entire $($rest)* capture groups along, instead of repeating one by one.
     };
     (@fix stack: $top:tt [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$($rest:tt)*] dump: $dump:tt) => { //needed to avoid some fuckery in the first statement, fixes up the formatting.
-        // internal_lisp!(stack: [$top $($stack_entries)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)
-        println!("{}", stringify!($top)); //for debugging purposes only
+        internal_lisp!(stack: [$top $($stack_entries)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)
+        // println!("{}", stringify!($top)); //for debugging purposes only
     };
     // (stack: [$($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
     //     macro_rules! evaluate_in_env {
@@ -426,22 +427,21 @@ macro_rules! env_test {
 // (LAMBDA (X) T)
 macro_rules! cek {
 
-    //operate on raw lambda term
     (@ $x:ident, {$($key:ident : $val:tt)*}, $k:tt) => { // map to env
         {
         macro_rules! consult_env {
             $(
                 ($key) => {cek!(@ $k, $val)};
             )*
-            ($x) => {cek!(@ $k,$x)}; //if not in enviroment, we just evaluate it to itself so that ie (\x.y)x -> y
+            ($x) => {cek!(@ $k,$x)}; //if not in enviroment, we just evaluate it to itself so that ie (\x.y)x -> y.
         }
         consult_env!($x)
         }
     };
-    (@ (LAMBDA ($x:ident) $arg:tt), $env:tt, $k:tt) => { //handles expressions like (LAMBDA (x) T)
+    (@ (λ $x:ident. $arg:tt), $env:tt, $k:tt) => { //handles lambdas
         cek!(@ $k, [$x, $arg, $env])
     };
-    (@ ($t1:tt $t2:tt), $env:tt, $k:tt) => { //application case; handles expressions like ((LAMBDA (x) y) z) -> y
+    (@ ($t1:tt $t2:tt), $env:tt, $k:tt) => { //handles application case
         cek!(@ $t1, $env, (arg: $t2, $env, $k))
     };
 
@@ -463,22 +463,30 @@ macro_rules! cek_call {
 
 #[test]
 fn cek_test() {
-    let single_var = cek_call!(x);
-    let single_lamba = dbg!(cek_call!(((LAMBDA (x) y) x )  ));
+    let _single_var = cek_call!(x);
+    let _single_lamba = dbg!(cek_call!(((λ x. y) x )  ));
+    let _single_lamba = dbg!(cek_call!(((λ y.  (y y)) (λ x. x) )  ));
+    let _nested = dbg!(cek_call!((λ x. ((λ y. y)x)) )); //evaluates to itself, since no arguments given
+    let _nested = dbg!(cek_call!(((λ f. (λ x. (f x))) (λ y. (λ x. y))))); //evaluates to itself, since no arguments given
+    let _nested = dbg!(cek_call!(((λ x.x)(λ y.(λ y.(λ x.x)))))); //evaluates to itself, since no arguments given
+                                                                 // let nested = cek_call!(((λ x. (x x)) (λ x. (x x)))); //loops forever
 }
 
 #[test]
 fn stack_lisp_test() {
-    let hello = stack_lisp_v1!((ATOM (QUOTE hello)) [] []);
+    let hello = stack_lisp_v1!( (ATOM (QUOTE hello)) [] []);
     println!("{hello}");
-    let hello = stack_lisp_v1!((CDR (QUOTE (hello))) [] []);
+    let hello = stack_lisp_v1!( (CDR (QUOTE (hello))) [] []);
     println!("{hello}");
-    let hello = stack_lisp_v1!((QUOTE (QUOTE (hello))) [] []);
+    let hello = stack_lisp_v1!( (QUOTE (QUOTE (hello))) [] []);
     println!("{hello}");
     internal_lisp!(stack: [random nonsense] env: [a: (A B)] control: [a] dump: []);
     dbg!(internal_lisp!(stack: [] env: [] control: [(CDR (QUOTE (X Y)))] dump: []));
+    let hello = internal_lisp!(stack: [] env: [a: (A B)] control: [ (DISPLAY(CDR a))] dump: []);
+    // let lask = dbg!(
+    //     internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) (CDR X)) (QUOTE (A B)))] dump: [])
+    // );
 }
-
 // Desription of my lisp:
 
 // a simple LISP with lexical scoping, implemented fully in the Rust macro system.

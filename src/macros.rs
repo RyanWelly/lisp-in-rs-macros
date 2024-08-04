@@ -311,11 +311,12 @@ macro_rules! internal_lisp {
 
     // (t1 t2) => t2::t1::ap
     // figure out a nice way to extend this to more args automatically
+    // TODO: expand (op arg1 arg2 ... argn) -> arg1 :: arg2 ... :: argn :: op :: ap
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
     };
 
-    // pop primitives onto the stack as procs
+    // pop primitives onto the stack as their own special tokens
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [@CAR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
@@ -334,21 +335,29 @@ macro_rules! internal_lisp {
     // Evaluate primitives - top of the stack
 
 
-    // CAR takes a list off the top of the stack, and returns its car.
-    // (CAR (x y z)) == x
+    // CAR
     (stack: [@CAR ($car:tt $($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [$car $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
+
+    // CDR
     (stack: [@CDR ($car:tt) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [NIL $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [@CDR ($car:tt $($cdrs:tt)* ) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [($($cdrs)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
+
+    //DISPLAY
     (stack: [@DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         {println!("{}", stringify!($val));
         internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
+
+    // TODO:
+    // - EQ
+    // - CONS
+    // -
 
 
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
@@ -359,13 +368,9 @@ macro_rules! internal_lisp {
 
     // done processing the current closure, pop stack/env/control of the dump and continue evaluating
 
-    // (stack:[$val:tt $($stack_entries:tt)*] env: $env:tt control: [] dump: []  ) => {};
-
-
-
-
-
-    // Split list into stack (CAR X) => X::CAR::ap
+    (stack:[$val:tt $($stack_entries:tt)*] env: $env:tt control: [] dump: [ ([$($prev_stack:tt)*], $prev_env:tt, $prev_control:tt) $($rest_of_dump:tt)* ]  ) => {
+        internal_lisp!(stack: [$val $($prev_stack)*] env: $prev_env control: $prev_control dump: [$($rest_of_dump)*])
+    }; //working on this
 
 
 
@@ -375,7 +380,7 @@ macro_rules! internal_lisp {
             $(
                 ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(@fix stack: $val [$stack] env: $env control: $control dump: $dump)};
             )*
-            ($not_found:ident) => {error!("val not found in environment")}
+            ($symb, $stack:tt, $env: tt, $control:tt) => {error!("val not found in environment")}
         }
         evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*]) } // we do this cursed expansion here so we can pass the entire $($rest)* capture groups along, instead of repeating one by one.
     };
@@ -486,6 +491,14 @@ fn stack_lisp_test() {
     // let lask = dbg!(
     //     internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) (CDR X)) (QUOTE (A B)))] dump: [])
     // );
+    let hello =
+        dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) x)(QUOTE x))] dump: []));
+    let hello = dbg!(
+        internal_lisp!(stack: [] env: [] control: [((LAMBDA (y) (CDR y))(QUOTE (x)))] dump: [])
+    );
+    let invalid = dbg!(
+        internal_lisp!(stack: [] env: [] control: [((LAMBDA (y) (CDR x))(QUOTE (x)))] dump: [])
+    );
 }
 // Desription of my lisp:
 

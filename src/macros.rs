@@ -49,20 +49,20 @@ macro_rules! internal_lisp {
 
     // pop primitives onto the stack as their own special tokens
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@CAR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+        internal_lisp!(stack: [__CAR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [CDR $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@CDR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+        internal_lisp!(stack: [__CDR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [ATOM $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@ATOM $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+        internal_lisp!(stack: [__ATOM $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [DISPLAY $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@DISPLAY $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+        internal_lisp!(stack: [__DISPLAY $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [ATOM $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [@ATOM $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+        internal_lisp!(stack: [__ATOM $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
 
@@ -72,22 +72,24 @@ macro_rules! internal_lisp {
     // - CONS
     // - ATOM
 
+    //TODO: change @CAR to something else, it's counting as two tokens
+
 
     // CAR
-    (stack: [@CAR ($car:tt $($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CAR ($car:tt $($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [$car $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
     // CDR
-    (stack: [@CDR ($car:tt) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CDR ($car:tt) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [NIL $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
-    (stack: [@CDR ($car:tt $($cdrs:tt)* ) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CDR ($car:tt $($cdrs:tt)* ) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [($($cdrs)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
     //DISPLAY
-    (stack: [@DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+    (stack: [__DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         {println!("{}", stringify!($val));
         internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
@@ -112,7 +114,7 @@ macro_rules! internal_lisp {
     (stack: [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
         {macro_rules! evaluate_in_env {
             $(
-                ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(@fix stack: $val [$stack] env: $env control: $control dump: $dump)};
+                ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(@fix stack: $val $stack env: $env control: $control dump: $dump)};
             )*
             ($symb, $stack:tt, $env: tt, $control:tt) => {error!("val not found in environment")}
         }
@@ -181,7 +183,9 @@ fn stack_lisp_test() {
     );
     let top_level_test = lisp!(QUOTE X);
     lisp!(LAMBDA (x) (CDR x));
-    lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR); //this leads to an error, since CAR is not found in environment. TODO: rejig so that the primitives are stored in env too
+    lisp!((LAMBDA(x)x)(QUOTE X));
+    let hello = dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA(x)x)(QUOTE X))] dump: []));
+    let test = dbg!(lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR)); //this leads to an error, since CAR is not found in environment. TODO: rejig so that the primitives are stored in env too
     dbg!(internal_lisp!(stack: [] env: [CAR: @CAR] control: [(CAR (QUOTE (a)))] dump: []));
 }
 // Desription of my lisp:

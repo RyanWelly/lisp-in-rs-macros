@@ -40,6 +40,7 @@ macro_rules! internal_lisp {
     // IF special form
     // (IF exp a1 a2) => exp:: (IFS a1 a2) and IFS branches based on the truthiness of the top value on stack (the evaluated exp).
 
+
     // (t1 t2) => t2::t1::ap
     // figure out a nice way to extend this to more args automatically
     // TODO: expand (op arg1 arg2 ... argn) -> arg1 :: arg2 ... :: argn :: op :: ap
@@ -48,22 +49,9 @@ macro_rules! internal_lisp {
     };
 
     // pop primitives onto the stack as their own special tokens
-    (stack: [$($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [__CAR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
-    };
-
-    (stack: [$($stack_entries:tt)*] env: $env:tt control: [CDR $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [__CDR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
-    };
-    (stack: [$($stack_entries:tt)*] env: $env:tt control: [ATOM $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [__ATOM $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
-    };
-    (stack: [$($stack_entries:tt)*] env: $env:tt control: [DISPLAY $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [__DISPLAY $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
-    };
-    (stack: [$($stack_entries:tt)*] env: $env:tt control: [ATOM $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [__ATOM $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
-    };
+    // (stack: [$($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
+    //     internal_lisp!(stack: [__CAR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    // };
 
 
     // Evaluate primitives - top of the stack
@@ -147,8 +135,8 @@ macro_rules! error {
 
 }
 
-macro_rules! lisp {
-    ($($toks:tt)*) => {internal_lisp!(stack: [] env: []  control: [($($toks)*)]  dump: [] )};
+macro_rules! lisp { //call internal_lisp! with the default env
+    ($($toks:tt)*) => {internal_lisp!(stack: [] env: [CAR: __CAR CDR: __CDR ATOM: __ATOM DISPLAY:__DISPLAY]  control: [($($toks)*)]  dump: [] )};
 }
 
 // we store an environment as an association list ([var_name_1: val, var_name_2: other_val])
@@ -169,10 +157,10 @@ macro_rules! env_test {
 fn stack_lisp_test() {
     internal_lisp!(stack: [random nonsense] env: [a: (A B)] control: [a] dump: []);
     dbg!(internal_lisp!(stack: [] env: [] control: [(CDR (QUOTE (X Y)))] dump: []));
-    let hello = internal_lisp!(stack: [] env: [a: (A B)] control: [ (DISPLAY(CDR a))] dump: []);
-    // let lask = dbg!(
-    //     internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) (CDR X)) (QUOTE (A B)))] dump: [])
-    // );
+    let hello = internal_lisp!(stack: [] env: [a: (A B)] control: [ (DISPLAY(CDR a))] dump: []); // TODO: add rejig test now that I put primitives into environment
+                                                                                                 // let lask = dbg!(
+                                                                                                 //     internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) (CDR X)) (QUOTE (A B)))] dump: [])
+                                                                                                 // );
     let hello =
         dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) x)(QUOTE y))] dump: []));
     let hello = dbg!(
@@ -186,7 +174,16 @@ fn stack_lisp_test() {
     lisp!((LAMBDA(x)x)(QUOTE X));
     let hello = dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA(x)x)(QUOTE X))] dump: []));
     let test = dbg!(lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR)); //this leads to an error, since CAR is not found in environment. TODO: rejig so that the primitives are stored in env too
-    dbg!(internal_lisp!(stack: [] env: [CAR: @CAR] control: [(CAR (QUOTE (a)))] dump: []));
+    dbg!(internal_lisp!(stack: [] env: [CAR: __CAR] control: [(CAR (QUOTE (a)))] dump: []));
+}
+#[test]
+fn primitive_tests() {}
+
+#[test]
+fn non_terminating() {
+    // This lisp term should never terminate.
+    // TODO: add to doc comment or something
+    // lisp!((LAMBDA (X) (X X))(LAMBDA (X) (X X)));
 }
 // Desription of my lisp:
 

@@ -39,6 +39,9 @@ macro_rules! internal_lisp {
 
     // IF special form
     // (IF exp a1 a2) => exp :: (IFS a1 a2) and IFS branches based on the truthiness of the top value on stack (the evaluated exp).
+    // Although, I could totally just implement `cond` at this point;
+    // (COND (p1 e1) .... (pn en)) => p1 :: (IFS e1 (COND (p2 e2) ... (pn en)) )
+    // (COND (p1 e)) => p1 :: (IFS e nil)
 
 
     // Define special form
@@ -100,7 +103,7 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [ NIL $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
-    // EQ -- WORKING ON, HAVEN'T TESTED YET
+    // EQ -- WORKING ON, HAVEN'T FULLY TESTED YET
     (stack: [__EQ $val1:tt $val2:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {{
         macro_rules! __internal_eq {
             ($val1 $val1) => {internal_lisp!(stack: [TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
@@ -108,6 +111,18 @@ macro_rules! internal_lisp {
         }
         __internal_eq!($val1 $val2)}
     };
+
+    // CONS - working on, haven't fully tested yet. Might need to reverse order of args
+    // (CONS a b) expands to a :: b :: CONS :: ap on the control, then [CONS b a ...] on the stack. Therefor:
+    // __Cons nil c => (c)
+    // __Cons (b c) a => (a b c)
+    (stack: [__CONS  NIL $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [ ($val)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    (stack: [__CONS ($($list:tt)*) $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [ ($val $($list)*) ($($stack)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    //TODO: decide on my representation of NIL; will I use the empty list here and just a binding of NIL: () to the env?
 
 
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
@@ -130,13 +145,12 @@ macro_rules! internal_lisp {
             $(
                 ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(@fix stack: $val $stack env: $env control: $control dump: $dump)};
             )*
-            ($symb, $stack:tt, $env: tt, $control:tt) => {error!("val not found in environment")}
+            ($symb, $stack:tt, $env: tt, $control:tt) => {error!("can't find" $symb "in env")}
         }
         evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*]) } // we do this cursed expansion here so we can pass the entire $($rest)* capture groups along, instead of repeating one by one.
     };
     (@fix stack: $top:tt [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$($rest:tt)*] dump: $dump:tt) => { //needed to avoid some fuckery in the first statement, fixes up the formatting.
         internal_lisp!(stack: [$top $($stack_entries)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)
-        // println!("{}", stringify!($top)); //for debugging purposes only
     };
 
 
@@ -158,7 +172,8 @@ macro_rules! lisp { //call internal_lisp! with the default env
         CDR: __CDR
         ATOM: __ATOM
         DISPLAY:__DISPLAY
-        EQ: __EQ]
+        EQ: __EQ
+        CONS: __CONS]
         control: [($($toks)*)]
         dump: [] )};
 }
@@ -201,6 +216,8 @@ fn stack_lisp_test() {
     dbg!(internal_lisp!(stack: [] env: [CAR: __CAR] control: [(CAR (QUOTE (a)))] dump: []));
     lisp!(ATOM (QUOTE X));
 }
+
+// https://doc.rust-lang.org/book/ch11-03-test-organization.html
 #[test]
 fn primitive_tests() {
     assert_eq!(lisp!(ATOM(QUOTE X)), "TRUE");
@@ -211,13 +228,21 @@ fn primitive_tests() {
 fn multi_args() {
     assert_eq!(lisp!(EQ (QUOTE A) (QUOTE A)), "TRUE");
     assert_eq!(lisp!(EQ (QUOTE A) (QUOTE B)), "NIL");
+    // assert_eq!(lisp!(CONS (QUOTE A) (QUOTE B)), "NIL");
+    assert_eq!(lisp!(CONS (QUOTE A) (QUOTE NIL)), "(A)");
+    // println!("{}", lisp!(CONS (QUOTE A) (QUOTE (B C))));
+}
+
+#[test]
+fn conditionals() {
+    // assert_eq!(lisp!(COND( NIL TRUE) (TRUE NIL)), "NIL");
 }
 
 #[test]
 fn non_terminating() {
     // This lisp term should never terminate.
-    // TODO: add to doc comment or something
-    // lisp!((LAMBDA (X) (X X))(LAMBDA (X) (X X)));
+
+    // lisp!((LAMBDA (X) (X X))(LAMBDA (Y) (Y Y )));
 }
 // Desription of my lisp:
 

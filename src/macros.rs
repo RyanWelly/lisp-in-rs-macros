@@ -38,7 +38,12 @@ macro_rules! internal_lisp {
 
 
     // IF special form
-    // (IF exp a1 a2) => exp:: (IFS a1 a2) and IFS branches based on the truthiness of the top value on stack (the evaluated exp).
+    // (IF exp a1 a2) => exp :: (IFS a1 a2) and IFS branches based on the truthiness of the top value on stack (the evaluated exp).
+
+
+    // Define special form
+    // semantics: can use at top level or any level at all, (define name exp) just evalutes exp in the current env, then binds it to `name` in the current env.
+    // (DEFINE name expr) => expr :: (__DEFINE name )
 
 
     // (t1 t2) => t2::t1::ap
@@ -47,6 +52,10 @@ macro_rules! internal_lisp {
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
     };
+    (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $($args:tt)*) $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$($args)* $op ap $($rest)*] dump: $dump)
+    };
+
 
     // pop primitives onto the stack as their own special tokens
     // (stack: [$($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
@@ -60,7 +69,7 @@ macro_rules! internal_lisp {
     // - CONS
     // - ATOM
 
-    //TODO: change @CAR to something else, it's counting as two tokens
+    // TODO: maybe evalute () to NIL? Decide properly how I handle NIL vs () vs '()
 
 
     // CAR
@@ -76,12 +85,29 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [($($cdrs)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
-    //DISPLAY
+    // DISPLAY
     (stack: [__DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         {println!("{}", stringify!($val));
         internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
 
+    //ATOM -- WORKING ON, HAVEN'T TESTED YET
+    (stack: [__ATOM $atom:ident $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [ TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+    };
+
+    (stack: [__ATOM $not_atom:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [ NIL $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+    };
+
+    // EQ -- WORKING ON, HAVEN'T TESTED YET
+    (stack: [__EQ $val1:tt $val2:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {{
+        macro_rules! __internal_eq {
+            ($val1 $val1) => {internal_lisp!(stack: [TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
+            ($val1 $val2) => {internal_lisp!(stack: [NIL $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
+        }
+        __internal_eq!($val1 $val2)}
+    };
 
 
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
@@ -98,7 +124,7 @@ macro_rules! internal_lisp {
 
 
 
-    // Evaluate symbol in environment - Rule 1 in notes
+    // Evaluate symbol in environment
     (stack: [$($stack_entries:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
         {macro_rules! evaluate_in_env {
             $(
@@ -112,20 +138,11 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [$top $($stack_entries)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)
         // println!("{}", stringify!($top)); //for debugging purposes only
     };
-    // (stack: [$($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [$symb:ident $($rest:tt)*] dump: $dump:tt) => {
-    //     macro_rules! evaluate_in_env {
-    //         $(
-    //             ($key) => {internal_lisp!(stack: [$val $($stack)*] env: [$($key : $val)*] control: [$($rest)*] dump: $dump)};
-    //         )*
-    //         ($not_found:ident) => {error!("val not found in environment")}
-    //     }
-    //     evaluate_in_env!($symb)
-    // };
 
 
     (stack: [$top:tt $($rest:tt)*] env: [$($envs:tt)*] control: [] dump: []  ) => {
         stringify!($top)
-    }; //Rule 6: termination
+    }; //Termination
 }
 
 // either causes a compiler error with the error message, or evalutes program to a string of the error message
@@ -136,7 +153,14 @@ macro_rules! error {
 }
 
 macro_rules! lisp { //call internal_lisp! with the default env
-    ($($toks:tt)*) => {internal_lisp!(stack: [] env: [CAR: __CAR CDR: __CDR ATOM: __ATOM DISPLAY:__DISPLAY]  control: [($($toks)*)]  dump: [] )};
+    ($($toks:tt)*) => {internal_lisp!(stack: []
+        env: [CAR: __CAR
+        CDR: __CDR
+        ATOM: __ATOM
+        DISPLAY:__DISPLAY
+        EQ: __EQ]
+        control: [($($toks)*)]
+        dump: [] )};
 }
 
 // we store an environment as an association list ([var_name_1: val, var_name_2: other_val])
@@ -175,9 +199,19 @@ fn stack_lisp_test() {
     let hello = dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA(x)x)(QUOTE X))] dump: []));
     let test = dbg!(lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR)); //this leads to an error, since CAR is not found in environment. TODO: rejig so that the primitives are stored in env too
     dbg!(internal_lisp!(stack: [] env: [CAR: __CAR] control: [(CAR (QUOTE (a)))] dump: []));
+    lisp!(ATOM (QUOTE X));
 }
 #[test]
-fn primitive_tests() {}
+fn primitive_tests() {
+    assert_eq!(lisp!(ATOM(QUOTE X)), "TRUE");
+    assert_eq!(lisp!(ATOM(QUOTE(X))), "NIL");
+}
+
+#[test]
+fn multi_args() {
+    assert_eq!(lisp!(EQ (QUOTE A) (QUOTE A)), "TRUE");
+    assert_eq!(lisp!(EQ (QUOTE A) (QUOTE B)), "NIL");
+}
 
 #[test]
 fn non_terminating() {

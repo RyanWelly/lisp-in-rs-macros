@@ -43,14 +43,13 @@ macro_rules! internal_lisp {
 
     // Define special form
     // semantics: can use at top level or any level at all, (define name exp) just evalutes exp in the current env, then binds it to `name` in the current env.
-    // (DEFINE name expr) => expr :: (__DEFINE name )
+    // (DEFINE name expr) => expr :: {__DEFINE name}
 
 
 
 
     // (t1 t2) => t2::t1::ap
     // figure out a nice way to extend this to more args automatically
-    // TODO: expand (op arg1 arg2 ... argn) -> arg1 :: arg2 ... :: argn :: op :: ap
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
     };
@@ -75,7 +74,7 @@ macro_rules! internal_lisp {
 
     // CDR
     (stack: [__CDR ($car:tt) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [NIL $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+        internal_lisp!(stack: [() $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [__CDR ($car:tt $($cdrs:tt)* ) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [($($cdrs)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
@@ -93,14 +92,14 @@ macro_rules! internal_lisp {
     };
 
     (stack: [__ATOM $not_atom:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [ NIL $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+        internal_lisp!(stack: [ () $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
     // EQ -- WORKING ON, HAVEN'T FULLY TESTED YET
     (stack: [__EQ $val1:tt $val2:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {{
         macro_rules! __internal_eq {
             ($val1 $val1) => {internal_lisp!(stack: [TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
-            ($val1 $val2) => {internal_lisp!(stack: [NIL $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
+            ($val1 $val2) => {internal_lisp!(stack: [() $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
         }
         __internal_eq!($val1 $val2)}
     };
@@ -109,7 +108,7 @@ macro_rules! internal_lisp {
     // (CONS a b) expands to a :: b :: CONS :: ap on the control, then [CONS b a ...] on the stack. Therefor:
     // __Cons nil c => (c)
     // __Cons (b c) a => (a b c)
-    (stack: [__CONS  NIL $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CONS  () $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ ($val)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [__CONS ($($list:tt)*) $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
@@ -129,7 +128,7 @@ macro_rules! internal_lisp {
 
     (stack:[$val:tt $($stack_entries:tt)*] env: $env:tt control: [] dump: [ ([$($prev_stack:tt)*], $prev_env:tt, $prev_control:tt) $($rest_of_dump:tt)* ]  ) => {
         internal_lisp!(stack: [$val $($prev_stack)*] env: $prev_env control: $prev_control dump: [$($rest_of_dump)*])
-    }; //working on this
+    };
 
 
 
@@ -167,7 +166,8 @@ macro_rules! lisp { //call internal_lisp! with the default env
         ATOM: __ATOM
         DISPLAY:__DISPLAY
         EQ: __EQ
-        CONS: __CONS]
+        CONS: __CONS
+        NIL: ()]
         control: [($($toks)*)]
         dump: [] )};
 }
@@ -204,13 +204,24 @@ mod tests {
     #[test]
     fn primitive_tests() {
         assert_eq!(lisp!(ATOM(QUOTE X)), stringify!(TRUE));
-        assert_eq!(lisp!(ATOM(QUOTE(X))), stringify!(NIL));
+        assert_eq!(lisp!(ATOM(QUOTE(X))), stringify!(()));
+        assert_eq!(
+            lisp!(ATOM
+            (CONS 
+            (QUOTE X) NIL)),
+            stringify!(())
+        );
         assert_eq!(lisp!(QUOTE X), "X");
         assert_eq!(lisp!((LAMBDA(x)x)(QUOTE gibbergabber)), "gibbergabber");
         assert_eq!(lisp!(CAR(QUOTE(X))), "X");
-        assert_eq!(lisp!(CDR(QUOTE(X))), "NIL");
-        assert_eq!(lisp!(CAR(CDR(QUOTE(COMPLEX(QUOTE(A)(B)))))), stringify!((QUOTE(A) (B))));
-        assert_eq!(lisp!(ATOM(QUOTE(QUOTE(A)(B)))), "NIL");
+        assert_eq!(lisp!(CDR(QUOTE(X))), "()");
+        assert_eq!(
+            lisp!(CAR(CDR(QUOTE(COMPLEX(QUOTE(A)(B)))))),
+            stringify!((QUOTE(A)(B)))
+        );
+
+        assert_eq!(lisp!(CDR (QUOTE (A B C))), stringify!((B C)));
+        assert_eq!(lisp!(ATOM(QUOTE(QUOTE(A)(B)))), "()");
 
         assert_eq!(lisp!(DISPLAY(CAR(QUOTE(X)))), "X");
     }
@@ -222,14 +233,18 @@ mod tests {
             (QUOTE A) (QUOTE A)),
             "TRUE"
         );
-        assert_eq!(lisp!(EQ (QUOTE A) (QUOTE B)), "NIL");
+        assert_eq!(lisp!(EQ (QUOTE A) (QUOTE B)), "()");
         assert_eq!(lisp!(EQ CAR CAR), "TRUE");
         assert_eq!(lisp!(EQ (LAMBDA (X) X) (LAMBDA (X) X)), "TRUE");
-        assert_eq!(lisp!(EQ (LAMBDA (Y) Y) (LAMBDA (X) X)), "NIL");
+        assert_eq!(lisp!(EQ (LAMBDA (Y) Y) (LAMBDA (X) X)), "()");
 
-        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE NIL)), stringify!((A)));
+        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE ())), stringify!((A)));
         assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B C))), stringify!((A B C)));
         assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B))), "(A B)");
+        assert_eq!(
+            lisp!(CONS (QUOTE A) (CONS (QUOTE B) NIL)),
+            stringify!((A B))
+        );
     }
 
     #[test]
@@ -247,7 +262,8 @@ mod tests {
 // Desription of my lisp:
 
 // a simple LISP with lexical scoping, implemented fully in the Rust macro system.
-// Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda with a single argument, display
+// Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda with a single argument, display.
+// NIL is a shorthand for the empty list, and the empty list also represents falsity. TRUE and every other value is truthy
 // hopefully soon: lambda with arbitary arguments, eval primitive, define primitive.
 // maybe add macros?
 // for proof of concept, write a meta circular interpreter (ie just steal Graham's).

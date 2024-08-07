@@ -18,11 +18,7 @@
 //a thing to consider; how to handle dotted lists? maybe convert all lists of the form (x y z) into (x y z nil) etc. Or introduce {a b c} === (a b . c)
 macro_rules! internal_lisp {
 
-    // Evaluate primitives/special forms
-    // for primitives, when you encounter the primitive CONS, the @CONS token gets put on the stack (to differentiate between CONS as data and CONS as proc).
-    // we do it this way instead of just scanning for `CONS ap`` in the control so that (define f CONS) (f 'a 'b) has the intended effect.
-    // maybe do something to stop people doing (quote @CONS), like use {CONS} and specialise on QUOTE to stop anyone doing (QUOTE {$t:tt})?
-    // or for thematic consistency, do a similar format to closures and use [CONS]
+    // Evaluate special forms
 
     // QUOTE special form
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [(QUOTE $x:tt)$($rest:tt)*] dump: $dump:tt) => {
@@ -191,7 +187,6 @@ macro_rules! env_test {
 fn stack_lisp_test() {
     let top_level_test = lisp!(QUOTE X);
     lisp!(LAMBDA (x) (CDR x));
-    lisp!((LAMBDA(x)x)(QUOTE X));
     let hello = dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA(x)x)(QUOTE X))] dump: []));
     let test = dbg!(lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR));
     dbg!(internal_lisp!(stack: [] env: [CAR: __CAR] control: [(CAR (QUOTE (a)))] dump: []));
@@ -199,37 +194,46 @@ fn stack_lisp_test() {
 }
 
 // https://doc.rust-lang.org/book/ch11-03-test-organization.html
-#[test]
-fn primitive_tests() {
-    assert_eq!(lisp!(ATOM(QUOTE X)), "TRUE");
-    assert_eq!(lisp!(ATOM(QUOTE(X))), "NIL");
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn primitive_tests() {
+        assert_eq!(lisp!(ATOM(QUOTE X)), "TRUE");
+        assert_eq!(lisp!(ATOM(QUOTE(X))), "NIL");
+        assert_eq!(lisp!((LAMBDA(x)x)(QUOTE X)), "X");
+        assert_eq!(lisp!(CAR(QUOTE(X))), "X");
+        assert_eq!(lisp!(CDR(QUOTE(X))), "NIL");
+        dbg!(lisp!(QUOTE()));
+    }
+
+    #[test]
+    fn multi_args() {
+        assert_eq!(lisp!(EQ (QUOTE A) (QUOTE A)), "TRUE");
+        assert_eq!(lisp!(EQ (QUOTE A) (QUOTE B)), "NIL");
+
+        // assert_eq!(lisp!(CONS (QUOTE A) (QUOTE B)), "NIL");
+        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE NIL)), "(A)");
+        // println!("{}", lisp!(CONS (QUOTE A) (QUOTE (B C))));
+        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B))), "(A B)");
+    }
+
+    #[test]
+    fn conditionals() {
+        // assert_eq!(lisp!(COND( NIL TRUE) (TRUE NIL)), "NIL");
+    }
+    #[test]
+    fn non_terminating() {
+        // This lisp term should never terminate.
+
+        // lisp!((LAMBDA (X) (X X))(LAMBDA (Y) (Y Y )));
+    }
 }
 
-#[test]
-fn multi_args() {
-    assert_eq!(lisp!(EQ (QUOTE A) (QUOTE A)), "TRUE");
-    assert_eq!(lisp!(EQ (QUOTE A) (QUOTE B)), "NIL");
-    // assert_eq!(lisp!(CONS (QUOTE A) (QUOTE B)), "NIL");
-    assert_eq!(lisp!(CONS (QUOTE A) (QUOTE NIL)), "(A)");
-    // println!("{}", lisp!(CONS (QUOTE A) (QUOTE (B C))));
-    assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B))), "(A B)");
-}
-
-#[test]
-fn conditionals() {
-    // assert_eq!(lisp!(COND( NIL TRUE) (TRUE NIL)), "NIL");
-}
-
-#[test]
-fn non_terminating() {
-    // This lisp term should never terminate.
-
-    // lisp!((LAMBDA (X) (X X))(LAMBDA (Y) (Y Y )));
-}
 // Desription of my lisp:
 
 // a simple LISP with lexical scoping, implemented fully in the Rust macro system.
-// Avaliable primitives: atom, if, eq, cons, car, cdr, lambda with a single argument, display
+// Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda with a single argument, display
 // hopefully soon: lambda with arbitary arguments, eval primitive, define primitive.
 // maybe add macros?
 // for proof of concept, write a meta circular interpreter (ie just steal Graham's).

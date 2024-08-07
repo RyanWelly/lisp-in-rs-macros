@@ -60,11 +60,6 @@ macro_rules! internal_lisp {
     };
 
 
-    // pop primitives onto the stack as their own special tokens
-    // (stack: [$($stack_entries:tt)*] env: $env:tt control: [CAR $($rest:tt)*] dump: $dump:tt) => {
-    //     internal_lisp!(stack: [__CAR $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
-    // };
-
 
     // Evaluate primitives - top of the stack
     // TODO:
@@ -120,7 +115,7 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [ ($val)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     (stack: [__CONS ($($list:tt)*) $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [ ($val $($list)*) ($($stack)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+        internal_lisp!(stack: [ ($val $($list)*)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     //TODO: decide on my representation of NIL; will I use the empty list here and just a binding of NIL: () to the env?
 
@@ -194,25 +189,11 @@ macro_rules! env_test {
 
 #[test]
 fn stack_lisp_test() {
-    internal_lisp!(stack: [random nonsense] env: [a: (A B)] control: [a] dump: []);
-    dbg!(internal_lisp!(stack: [] env: [] control: [(CDR (QUOTE (X Y)))] dump: []));
-    let hello = internal_lisp!(stack: [] env: [a: (A B)] control: [ (DISPLAY(CDR a))] dump: []); // TODO: add rejig test now that I put primitives into environment
-                                                                                                 // let lask = dbg!(
-                                                                                                 //     internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) (CDR X)) (QUOTE (A B)))] dump: [])
-                                                                                                 // );
-    let hello =
-        dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA (x) x)(QUOTE y))] dump: []));
-    let hello = dbg!(
-        internal_lisp!(stack: [] env: [] control: [((LAMBDA (y) (CDR y))(QUOTE (x)))] dump: [])
-    );
-    let invalid = dbg!(
-        internal_lisp!(stack: [] env: [] control: [((LAMBDA (y) (CDR x))(QUOTE (x)))] dump: [])
-    );
     let top_level_test = lisp!(QUOTE X);
     lisp!(LAMBDA (x) (CDR x));
     lisp!((LAMBDA(x)x)(QUOTE X));
     let hello = dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA(x)x)(QUOTE X))] dump: []));
-    let test = dbg!(lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR)); //this leads to an error, since CAR is not found in environment. TODO: rejig so that the primitives are stored in env too
+    let test = dbg!(lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR));
     dbg!(internal_lisp!(stack: [] env: [CAR: __CAR] control: [(CAR (QUOTE (a)))] dump: []));
     lisp!(ATOM (QUOTE X));
 }
@@ -231,6 +212,7 @@ fn multi_args() {
     // assert_eq!(lisp!(CONS (QUOTE A) (QUOTE B)), "NIL");
     assert_eq!(lisp!(CONS (QUOTE A) (QUOTE NIL)), "(A)");
     // println!("{}", lisp!(CONS (QUOTE A) (QUOTE (B C))));
+    assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B))), "(A B)");
 }
 
 #[test]

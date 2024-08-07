@@ -24,6 +24,7 @@ macro_rules! internal_lisp {
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [(QUOTE $x:tt)$($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [$x $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
+    // Maybe use ^ as a quote shorthand, since ' is not a valid rust token?
 
 
 
@@ -45,6 +46,8 @@ macro_rules! internal_lisp {
     // (DEFINE name expr) => expr :: (__DEFINE name )
 
 
+
+
     // (t1 t2) => t2::t1::ap
     // figure out a nice way to extend this to more args automatically
     // TODO: expand (op arg1 arg2 ... argn) -> arg1 :: arg2 ... :: argn :: op :: ap
@@ -60,7 +63,6 @@ macro_rules! internal_lisp {
     // Evaluate primitives - top of the stack
     // TODO:
     // - EQ
-    // - CONS
     // - ATOM
 
     // TODO: maybe evalute () to NIL? Decide properly how I handle NIL vs () vs '()
@@ -82,7 +84,7 @@ macro_rules! internal_lisp {
     // DISPLAY
     (stack: [__DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         {println!("{}", stringify!($val));
-        internal_lisp!(stack: [$car $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
+        internal_lisp!(stack: [$val $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
 
     //ATOM -- WORKING ON, HAVEN'T TESTED YET
@@ -114,6 +116,7 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [ ($val $($list)*)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
     //TODO: decide on my representation of NIL; will I use the empty list here and just a binding of NIL: () to the env?
+    // I've decided to use the internal representation of the empty list for nil, so that NIL evalutes to (), but that () is also not self evaluating.
 
 
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
@@ -197,24 +200,35 @@ fn stack_lisp_test() {
 
 #[cfg(test)]
 mod tests {
+    //TODO: maybe use stringify for the correct output instead of raw string literals
     #[test]
     fn primitive_tests() {
-        assert_eq!(lisp!(ATOM(QUOTE X)), "TRUE");
-        assert_eq!(lisp!(ATOM(QUOTE(X))), "NIL");
-        assert_eq!(lisp!((LAMBDA(x)x)(QUOTE X)), "X");
+        assert_eq!(lisp!(ATOM(QUOTE X)), stringify!(TRUE));
+        assert_eq!(lisp!(ATOM(QUOTE(X))), stringify!(NIL));
+        assert_eq!(lisp!(QUOTE X), "X");
+        assert_eq!(lisp!((LAMBDA(x)x)(QUOTE gibbergabber)), "gibbergabber");
         assert_eq!(lisp!(CAR(QUOTE(X))), "X");
         assert_eq!(lisp!(CDR(QUOTE(X))), "NIL");
-        dbg!(lisp!(QUOTE()));
+        assert_eq!(lisp!(CAR(CDR(QUOTE(COMPLEX(QUOTE(A)(B)))))), stringify!((QUOTE(A) (B))));
+        assert_eq!(lisp!(ATOM(QUOTE(QUOTE(A)(B)))), "NIL");
+
+        assert_eq!(lisp!(DISPLAY(CAR(QUOTE(X)))), "X");
     }
 
     #[test]
     fn multi_args() {
-        assert_eq!(lisp!(EQ (QUOTE A) (QUOTE A)), "TRUE");
+        assert_eq!(
+            lisp!(EQ 
+            (QUOTE A) (QUOTE A)),
+            "TRUE"
+        );
         assert_eq!(lisp!(EQ (QUOTE A) (QUOTE B)), "NIL");
+        assert_eq!(lisp!(EQ CAR CAR), "TRUE");
+        assert_eq!(lisp!(EQ (LAMBDA (X) X) (LAMBDA (X) X)), "TRUE");
+        assert_eq!(lisp!(EQ (LAMBDA (Y) Y) (LAMBDA (X) X)), "NIL");
 
-        // assert_eq!(lisp!(CONS (QUOTE A) (QUOTE B)), "NIL");
-        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE NIL)), "(A)");
-        // println!("{}", lisp!(CONS (QUOTE A) (QUOTE (B C))));
+        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE NIL)), stringify!((A)));
+        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B C))), stringify!((A B C)));
         assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B))), "(A B)");
     }
 

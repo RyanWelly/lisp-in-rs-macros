@@ -199,7 +199,7 @@ macro_rules! internal_lisp {
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
     // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
     (stack: [[$var:ident, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-        internal_lisp!(stack: [] env: [$var:$v $($key:value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
+        internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
 
     // done processing the current closure, pop stack/env/control off the dump and continue evaluating
@@ -387,6 +387,22 @@ mod tests {
         // This lisp term should never terminate.
 
         // lisp!((LAMBDA (X) (X X))(LAMBDA (Y) (Y Y )));
+    }
+}
+
+#[cfg(test)]
+mod metacircular {
+    #[test]
+    fn metacircular() {
+        let test = lisp!(PROGN
+            (DISPLAY (QUOTE S))
+            (DEFINE NULL (LAMBDA (X) (EQ X NIL)))
+            // (NULL (QUOTE A))
+            (DISPLAY (NULL (QUOTE ())))
+            // (DISPLAY NULL)
+
+        ); //TODO: why does this fail with "can't find ap in env" error?????
+        dbg!(test);
     }
 }
 

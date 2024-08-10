@@ -89,7 +89,7 @@ macro_rules! internal_lisp {
 
 
     (stack: $stack:tt env: $env:tt control: [ (DEFINE $name:ident $exp:tt) $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: $stack env: $env control: [$exp {__DEFINE:name} $($rest)*] dump: $dump)
+        internal_lisp!(stack: $stack env: $env control: [$exp {__DEFINE:$name} $($rest)*] dump: $dump)
     };
 
     (stack: [$value:tt $($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [{__DEFINE:$name:ident} $($rest:tt)*] dump: $dump:tt) => {
@@ -342,10 +342,8 @@ mod tests {
 
     #[test]
     fn progn() {
-        let test = lisp!(PROGN
-        (QUOTE A)
-        (QUOTE B)
-        );
+        assert_eq!(lisp!(PROGN (QUOTE A) (QUOTE B)), stringify!(B));
+        let test = lisp!(PROGN (DEFINE A (QUOTE B)) (CONS A NIL)); // TODO: figure out why the define doesn't work, and A does not have a binding in the env.
         dbg!(test);
     }
 

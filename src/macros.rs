@@ -103,10 +103,18 @@ macro_rules! internal_lisp {
 
 
     (stack: $stack:tt env: $env:tt control: [(PROGN $($forms:tt)*) $($control:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: $stack env: $env control: [])
+        internal_lisp!(stack: $stack env: $env control: [(LIST $($forms)*) {__LAST} $($control)* ] dump: $dump)
     };
-    //how to implement? maybe transform stack: [(PROGN $($exprs:tt)*)] => stack [(list $($exprs)*), __LAST]
-    // which means TODO: make list primitive
+
+    // TODO: finish this to get progn working, interpret when {__LAST} is at the top of control. It assumes a list is at the top of the stack, and replaces the list
+    // with the last value
+    //TODO: test if this progn works. maybe rename PROGN to DO (inspired by clojure)
+    (stack: [($last:tt) $($stack:tt)*] env: $env:tt control: [{__LAST} $($control:tt)*] dump: $dump:tt ) => {
+        internal_lisp!(stack: [$last $($stack)*] env: $env control: [$($control)*] dump: $dump)
+    };
+    (stack: [($first:tt $($rest:tt)+) $($stack:tt)* ] env: $env:tt control: [{__LAST} $($control:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [($($rest)+) $($stack)*] env: $env control: [{__LAST} $($control)*] dump: $dump)
+    };
 
 
 
@@ -320,8 +328,25 @@ mod tests {
 
     #[test]
     fn list() {
-        let test = dbg!(lisp!(LIST (QUOTE A) NIL));
         assert_eq!(lisp!(LIST (QUOTE A) (QUOTE B)), stringify!((A B)));
+        assert_eq!(
+            lisp!(LIST (QUOTE A) (QUOTE B)),
+            lisp!(CONS (QUOTE A) (CONS (QUOTE B) NIL))
+        );
+        assert_eq!(
+            lisp!(LIST (QUOTE A) (LIST (QUOTE (A B C)))),
+            stringify!((A ((A B C))))
+        );
+        assert_eq!(lisp!(CAR (LIST (QUOTE A) (QUOTE B))), stringify!(A));
+    }
+
+    #[test]
+    fn progn() {
+        let test = lisp!(PROGN
+        (QUOTE A)
+        (QUOTE B)
+        );
+        dbg!(test);
     }
 
     #[test]

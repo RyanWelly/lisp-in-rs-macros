@@ -16,6 +16,7 @@
 // - using the wrong number of arguments to a function
 
 //a thing to consider; how to handle dotted lists? maybe convert all lists of the form (x y z) into (x y z nil) etc. Or introduce {a b c} === (a b . c)
+#[macro_export]
 macro_rules! internal_lisp {
 
     // Evaluate special forms
@@ -411,11 +412,16 @@ mod metacircular {
             (DISPLAY (NULL (QUOTE ())))
 
             (DEFINE NOT (LAMBDA (X) (COND (X NIL) (TRUE TRUE))) )
-            (NOT TRUE)
+            (NOT NIL)
 
-        ); //TODO: why does this fail with "can't find ap in env" error?????
+        ); 
         dbg!(test);
     }
+
+    // TODO: enable lambdas to have multiple args, by changing it so that (f a b c) evaluates (LIST a b c), puts that on stack, and then evalutes f. ie so that
+    // primitives work on a list of a certain length, instead of a certain number of elements on the stack. Then make CONS special, ie that
+    // (CONS a b) basically gets treated like a special form and rewritten directly, instead of just looked up in env like all the other primitives. 
+    // This gets around the recursive problem in every LIST call using CONS and therefore another LIST call. Dirty hack, but still. 
 }
 
 // Desription of my lisp:

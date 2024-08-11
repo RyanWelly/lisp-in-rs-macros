@@ -30,7 +30,7 @@ macro_rules! internal_lisp {
 
     // LAMBDA special form - saves closure onto stack with current env
     (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($name:ident) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [[$name, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+        internal_lisp!(stack: [[{$name}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
     //TODO: make multiple args work for lambdas
     // probably just automatically curry, ie make (lambda (x y z) T) => (lambda (x) (lambda (y) (lambda (z) T)))
@@ -42,6 +42,11 @@ macro_rules! internal_lisp {
     // }
     // it will only work if there are the same number of repeats in both matchings. Use this somehow to implement?
     // probably have to construct a list of all the args to be fed to the closure
+    // which probably means that I refactor so every opcode operates on lists instead of discrete values on the stack
+    // (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($(vars:ident)*) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
+    //     internal_lisp!(stack: [[{$($vars)*}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+
+    // };
 
 
 
@@ -198,9 +203,13 @@ macro_rules! internal_lisp {
 
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
     // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
-    (stack: [[$var:ident, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
+    (stack: [[{$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
         internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
+
+    // (stack: [[{$($var:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
+    //     internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
+    // }; // TODO: working on this bit to support multi arg lambda
 
     // done processing the current closure, pop stack/env/control off the dump and continue evaluating
 
@@ -303,6 +312,8 @@ mod tests {
         assert_eq!(lisp!(ATOM(QUOTE(QUOTE(A)(B)))), "()");
 
         assert_eq!(lisp!(DISPLAY(CAR(QUOTE(X)))), "X");
+
+        assert_eq!(lisp!((LAMBDA (Y) (CAR Y) ) (LIST NIL NIL NIL)), stringify!(()));
     }
 
     #[test]
@@ -338,6 +349,7 @@ mod tests {
             stringify!((A ((A B C))))
         );
         assert_eq!(lisp!(CAR (LIST (QUOTE A) (QUOTE B))), stringify!(A));
+
     }
 
     #[test]
@@ -395,11 +407,11 @@ mod metacircular {
     #[test]
     fn metacircular() {
         let test = lisp!(PROGN
-            (DISPLAY (QUOTE S))
             (DEFINE NULL (LAMBDA (X) (EQ X NIL)))
-            // (NULL (QUOTE A))
             (DISPLAY (NULL (QUOTE ())))
-            // (DISPLAY NULL)
+
+            (DEFINE NOT (LAMBDA (X) (COND (X NIL) (TRUE TRUE))) )
+            (NOT TRUE)
 
         ); //TODO: why does this fail with "can't find ap in env" error?????
         dbg!(test);

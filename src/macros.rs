@@ -49,12 +49,14 @@ macro_rules! internal_lisp {
 
     // };
 
+    (stack: [$($stacks:tt)*] env: $env:tt control: [(LOMBDA ($($names:ident)*) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [[{$($names)*}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
+    };
 
 
 
-    // IF special form
-    // (IF exp a1 a2) => exp :: (IFS a1 a2) and IFS branches based on the truthiness of the top value on stack (the evaluated exp).
-    // Although, I could totally just implement `cond` at this point;
+
+    // COND special form
     // (COND (p1 e1) .... (pn en)) => p1 :: (IFS e1 (COND (p2 e2) ... (pn en)) )
     // (COND (p1 e)) => p1 :: (IFS e nil)
     // TODO - working on cond
@@ -90,13 +92,16 @@ macro_rules! internal_lisp {
     // semantics: can use at top level or any level at all, (define name exp) just evalutes exp in the current env, then binds it to `name` in the current env.
     // Returns nil.
     // (DEFINE name expr) => expr :: {__DEFINE name}
-    // TODO - test
+    // TODO - enable recursive defines somehow - maybe specialise when there is a closure on tbe stack and {__DEFINE: $name} on the control
 
 
 
     (stack: $stack:tt env: $env:tt control: [ (DEFINE $name:ident $exp:tt) $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: $stack env: $env control: [$exp {__DEFINE:$name} $($rest)*] dump: $dump)
     };
+
+
+    // TODO - wrap defined lambdas in the z combinator to get them working recursively 
 
     (stack: [$value:tt $($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [{__DEFINE:$name:ident} $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [() $($stack)*] env: [$name: $value $($key : $val)*] control: [$($rest)*] dump: $dump )
@@ -105,16 +110,13 @@ macro_rules! internal_lisp {
     //PROGN special form
     // TODO
     // basically a hack to be able to write multiple lisp expressions
-    // (PROGN e1 e2 .. eN) evaluates e1, e2, etc then returns eN's value
+    // (PROGN e1 e2 .. eN) evalutes to the value of eN, but evaluates each expression in order
 
 
     (stack: $stack:tt env: $env:tt control: [(PROGN $($forms:tt)*) $($control:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: $stack env: $env control: [(LIST $($forms)*) {__LAST} $($control)* ] dump: $dump)
     };
 
-    // TODO: finish this to get progn working, interpret when {__LAST} is at the top of control. It assumes a list is at the top of the stack, and replaces the list
-    // with the last value
-    //TODO: test if this progn works. maybe rename PROGN to DO (inspired by clojure)
     (stack: [($last:tt) $($stack:tt)*] env: $env:tt control: [{__LAST} $($control:tt)*] dump: $dump:tt ) => {
         internal_lisp!(stack: [$last $($stack)*] env: $env control: [$($control)*] dump: $dump)
     };
@@ -147,10 +149,6 @@ macro_rules! internal_lisp {
 
 
     // Evaluate primitives - top of the stack
-    // TODO:
-    // - LIST
-
-    // TODO: maybe evalute () to NIL? Decide properly how I handle NIL vs () vs '()
 
 
     // CAR
@@ -181,7 +179,7 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [ () $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
-    // EQ -- WORKING ON, HAVEN'T FULLY TESTED YET
+    // EQ 
     (stack: [__EQ $val1:tt $val2:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {{
         macro_rules! __internal_eq {
             ($val1 $val1) => {internal_lisp!(stack: [TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
@@ -190,10 +188,7 @@ macro_rules! internal_lisp {
         __internal_eq!($val1 $val2)}
     };
 
-    // CONS - working on, haven't fully tested yet. Might need to reverse order of args
-    // (CONS a b) expands to a :: b :: CONS :: ap on the control, then [CONS b a ...] on the stack. Therefor:
-    // __Cons nil c => (c)
-    // __Cons (b c) a => (a b c)
+    // CONS 
     (stack: [__CONS  () $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ ($val)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
@@ -207,6 +202,16 @@ macro_rules! internal_lisp {
     (stack: [[{$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
         internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
+
+    (stack: [[{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
+        internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
+    };
+
+    //problem: consume the correct number of elements from the stack. Annoying as it is, probably just gonna do it step by step recursively.
+    // so reverse the list of idents to match the order on the stack, then pop one by one
+    // TODO: refactor system so every opcode takes a list, then this might be easier
+    (@load ) => {};
+    
 
     // (stack: [[{$($var:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
     //     internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
@@ -408,14 +413,21 @@ mod metacircular {
     #[test]
     fn metacircular() {
         let test = lisp!(PROGN
-            (DEFINE NULL (LAMBDA (X) (EQ X NIL)))
-            (DISPLAY (NULL (QUOTE ())))
+            (DEFINE tost (LAMBDA (X) (DISPLAY (QUOTE t))))
+            (DISPLAY (tost NIL) )
 
             (DEFINE NOT (LAMBDA (X) (COND (X NIL) (TRUE TRUE))) )
             (NOT NIL)
 
         ); 
         dbg!(test);
+
+
+        let recursive_define = lisp!(PROGN
+        (DEFINE IS_NULL (LAMBDA (X) (EQ X NIL)))
+        (DEFINE eternity (LAMBDA (Y) (eternity Y)))
+        (eternity NIL)
+        );
     }
 
     // TODO: enable lambdas to have multiple args, by changing it so that (f a b c) evaluates (LIST a b c), puts that on stack, and then evalutes f. ie so that
@@ -430,7 +442,7 @@ mod metacircular {
 // Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda with a single argument, display.
 // NIL is a shorthand for the empty list, and the empty list also represents falsity. TRUE and every other value is truthy.
 // The define form is a bit weird in my lisp; (define name expr) evaluates expr and then binds it to name in the current env, so there's no restriction to
-// only using it at the top level like there is in Scheme.
+// only using it at the top level like there is in Scheme. It does not allow recursive definitions, so use the Y combinator or similar for recursion.
 
 // hopefully soon: lambda with arbitary arguments, eval primitive, define primitive.
 // maybe add macros?

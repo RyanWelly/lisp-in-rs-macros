@@ -31,7 +31,7 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [[{$name}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
-    (stack: [$($stacks:tt)*] env: $env:tt control: [(LOMBDA ($($names:ident)*) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
+    (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($($names:ident)*) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [[{$($names)*}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
@@ -177,6 +177,8 @@ macro_rules! internal_lisp {
     };
 
 
+    // Deal with closures
+
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
     // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
     (stack: [[{$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
@@ -188,7 +190,6 @@ macro_rules! internal_lisp {
     (stack: [[{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
         internal_lisp!(@rev ($($vars)*) () stack: [$($stacks)*] env: [ $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
-
 
     // recursively reverse the list of idents from the closure, then match them one by one with the matching value on the stack
     // TODO: refactor system so every opcode takes a list, then this might be easier
@@ -219,7 +220,7 @@ macro_rules! internal_lisp {
             $(
                 ($key, $stack:tt, $env: tt, $control:tt) => {internal_lisp!(@fix stack: $val $stack env: $env control: $control dump: $dump)};
             )*
-            ($symb, $stack:tt, $env: tt, $control:tt) => {error!("can't find" $symb "in env")}
+            ($symb, $stack:tt, $env: tt, $control:tt) => {error!(Lisp error: cannot find $symb in env)}
         }
         evaluate_in_env!($symb, [$($stack_entries)*], [$($key : $val )*], [$($rest)*]) } // we do this cursed expansion here so we can pass the entire $($rest)* capture groups along, instead of repeating one by one.
     };
@@ -234,10 +235,10 @@ macro_rules! internal_lisp {
 }
 
 // Helper error handler macro
-// either causes a compiler error with the error message, or evalutes program to a string of the error message
+// either causes a compiler error with the error message, or evalutes program to a string of the error message. Comment out the first rule if you want to have.
 macro_rules! error {
-    ($($toks:tt)*) => {println!("{}", stringify!($($toks)*))}; // program evaluates to a single print statement with the error message
-    ($($toks:tt)+) => {compile_error!(concat!("Lisp execution failure: ", stringify!($($toks)+)))}; //program halts rust compilation with the error message
+    ($($toks:tt)+) => {compile_error!(stringify!($($toks)+))}; //program halts rust compilation with the error message
+    ($($toks:tt)*) => {println!("{}", stringify!($($toks)*))};  
 
 }
 
@@ -373,13 +374,13 @@ mod tests {
 
     #[test]
     fn lombda() {
-        assert_eq!(lisp!((LOMBDA (X Y) (CONS X Y)) (QUOTE A) NIL), stringify!((A)));
+        assert_eq!(lisp!((LAMBDA (X Y) (CONS X Y)) (QUOTE A) NIL), stringify!((A)));
         
         assert_eq!(lisp!(PROGN 
-            (DEFINE list3 (LOMBDA (X Y Z) (LIST X Y Z)))
+            (DEFINE list3 (LAMBDA (X Y Z) (LIST X Y Z)))
             (DEFINE constant (QUOTE A))
             (DISPLAY (list3 constant NIL constant))
-            (DEFINE print_a (LOMBDA () (DISPLAY (QUOTE A))))
+            (DEFINE print_a (LAMBDA () (DISPLAY (QUOTE A))))
             (print_a)
         ), "A");
     }
@@ -402,8 +403,7 @@ mod metacircular {
 
         let recursive_define = lisp!(PROGN
         (DEFINE IS_NULL (LAMBDA (X) (EQ X NIL)))
-        (DEFINE eternity (LAMBDA (Y) (eternity Y)))
-        (eternity NIL)
+        (DEFINE AND (LAMBDA (X Z) NIL))
         );
     }
 

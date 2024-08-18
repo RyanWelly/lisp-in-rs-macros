@@ -1,21 +1,3 @@
-// And God spoke all these words:
-// Quote of x is x
-// Atom of x is true if x is an atom
-// Car of a list returns the head
-// Cdr of a list returns the tail
-// Cons of x and y is the list (x y)
-
-//can use lambda for most things except for quote https://news.ycombinator.com/item?id=8715655
-
-// also ahhhhhh calling a function with the wrong number of elements is undefined behaviour in our scheme
-// ((IF X CONS CAR) (QUOTE (x y))) is immediate ub if X is truthy. We do check the number of args being given straight to a primitive though
-// eg (CONS x y z) will result in an error
-
-// instances of undefined behavior:
-// - assigning a special form to a variable (if, quote, etc)
-// - using the wrong number of arguments to a function
-
-//a thing to consider; how to handle dotted lists? maybe convert all lists of the form (x y z) into (x y z nil) etc. Or introduce {a b c} === (a b . c)
 #[macro_export]
 macro_rules! internal_lisp {
 

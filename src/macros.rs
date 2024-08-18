@@ -203,14 +203,27 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
 
-    (stack: [[{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-        internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
+    // order of args stored in the closure is in the wrong order compared to the order of operands on the stack, so first we reverse.
+    // TODO - find a better way of doing this than recursively reversing and then zipping
+    (stack: [[{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
+        internal_lisp!(@rev ($($vars)*) () stack: [$($stacks)*] env: [ $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
 
     //problem: consume the correct number of elements from the stack. Annoying as it is, probably just gonna do it step by step recursively.
     // so reverse the list of idents to match the order on the stack, then pop one by one
     // TODO: refactor system so every opcode takes a list, then this might be easier
-    (@load ) => {};
+    (@rev ($var:ident $($vars:ident)*) ($($reversed:ident)*) stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt) => {
+        internal_lisp!(@rev ($($vars)*) ($var $($reversed)*) stack: $stack env: $env control: $control dump: $dump)
+    };
+    (@rev () ($($vars:ident)*) stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt) => {
+        internal_lisp!(@load ($($vars)*) stack: $stack env: $env control: $control dump: $dump)
+    };
+    (@load  ($var:ident $($vars:ident)*) stack: [$top:tt $($stacks:tt)*] env: [$($key:ident : $value:tt)*] control: $control:tt dump: $dump:tt  ) => {
+        internal_lisp!(@load ($($vars)*) stack: [$($stacks)*] env: [$var: $top $($key : $value)* ] control: $control dump: $dump)
+    };
+    (@load  () stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt  ) => {
+        internal_lisp!(stack: $stack env: $env control: $control dump: $dump)
+    };
     
 
     // (stack: [[{$($var:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
@@ -405,6 +418,18 @@ mod tests {
         // This lisp term should never terminate.
 
         // lisp!((LAMBDA (X) (X X))(LAMBDA (Y) (Y Y )));
+    }
+
+    #[test]
+    fn lombda() {
+        let test = lisp!((LOMBDA (X Y) (CONS X Y)) (QUOTE A) NIL);
+        lisp!(PROGN 
+            (DEFINE list3 (LOMBDA (X Y Z) (LIST X Y Z)))
+            (DISPLAY (list3 NIL NIL NIL))
+            (DEFINE print_a (LOMBDA () (DISPLAY (QUOTE A))))
+            (print_a)
+        );
+        dbg!(test);
     }
 }
 

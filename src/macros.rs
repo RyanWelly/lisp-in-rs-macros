@@ -25,29 +25,11 @@ macro_rules! internal_lisp {
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [(QUOTE $x:tt)$($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [$x $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
-    // Maybe use ^ as a quote shorthand, since ' is not a valid rust token?
-
-
 
     // LAMBDA special form - saves closure onto stack with current env
     (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($name:ident) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [[{$name}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
-    //TODO: make multiple args work for lambdas
-    // probably just automatically curry, ie make (lambda (x y z) T) => (lambda (x) (lambda (y) (lambda (z) T)))
-    // actually, that kinda sucks
-
-    // IDEA: if you have eg
-    // macro_rules! test {
-    //     ($($repeat:ident)* : $($other_repeat) ) => { $($repeat, $other_repeat)*}
-    // }
-    // it will only work if there are the same number of repeats in both matchings. Use this somehow to implement?
-    // probably have to construct a list of all the args to be fed to the closure
-    // which probably means that I refactor so every opcode operates on lists instead of discrete values on the stack
-    // (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($(vars:ident)*) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
-    //     internal_lisp!(stack: [[{$($vars)*}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
-
-    // };
 
     (stack: [$($stacks:tt)*] env: $env:tt control: [(LOMBDA ($($names:ident)*) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [[{$($names)*}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
@@ -59,14 +41,12 @@ macro_rules! internal_lisp {
     // COND special form
     // (COND (p1 e1) .... (pn en)) => p1 :: (IFS e1 (COND (p2 e2) ... (pn en)) )
     // (COND (p1 e)) => p1 :: (IFS e nil)
-    // TODO - working on cond
 
 
 
-    // TODO - test this works
     (stack: $stack:tt env: $env:tt control: [(COND ($p:tt $e:tt) $(($pn:tt $en:tt))+ )  $($control:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: $stack env: $env control: [$p {__IFS $e (COND $(($pn $en))+  ) } $($control)*] dump: $dump)
-    }; //TODO - maybe have {IFS ...} instead of (IFS ...)
+    }; 
     (stack: $stack:tt env: $env:tt control: [(COND ($p:tt $e:tt)) $($control:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: $stack env: $env control: [$p {__IFS $e NIL } $($control)*] dump: $dump)
     }; // If we reach the end of the COND without a predicate matching, we return nil
@@ -126,7 +106,7 @@ macro_rules! internal_lisp {
 
 
 
-    // List - not a special form, but needs special handling
+    // List - not a special form, but needs special handling since it's varadic
 
     (stack: $stack:tt env: $env:tt control: [(LIST $head:tt $($args:tt)*)  $($control:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: $stack env: $env control: [(CONS $head (LIST $($args)*)) $($control)*] dump: $dump)
@@ -170,7 +150,7 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [$val $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
 
-    //ATOM -- WORKING ON, HAVEN'T TESTED YET
+    //ATOM 
     (stack: [__ATOM $atom:ident $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
@@ -209,8 +189,8 @@ macro_rules! internal_lisp {
         internal_lisp!(@rev ($($vars)*) () stack: [$($stacks)*] env: [ $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
     };
 
-    //problem: consume the correct number of elements from the stack. Annoying as it is, probably just gonna do it step by step recursively.
-    // so reverse the list of idents to match the order on the stack, then pop one by one
+
+    // recursively reverse the list of idents from the closure, then match them one by one with the matching value on the stack
     // TODO: refactor system so every opcode takes a list, then this might be easier
     (@rev ($var:ident $($vars:ident)*) ($($reversed:ident)*) stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt) => {
         internal_lisp!(@rev ($($vars)*) ($var $($reversed)*) stack: $stack env: $env control: $control dump: $dump)
@@ -224,11 +204,6 @@ macro_rules! internal_lisp {
     (@load  () stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt  ) => {
         internal_lisp!(stack: $stack env: $env control: $control dump: $dump)
     };
-    
-
-    // (stack: [[{$($var:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-    //     internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
-    // }; // TODO: working on this bit to support multi arg lambda
 
     // done processing the current closure, pop stack/env/control off the dump and continue evaluating
 
@@ -258,6 +233,7 @@ macro_rules! internal_lisp {
     }; //Termination
 }
 
+// Helper error handler macro
 // either causes a compiler error with the error message, or evalutes program to a string of the error message
 macro_rules! error {
     ($($toks:tt)*) => {println!("{}", stringify!($($toks)*))}; // program evaluates to a single print statement with the error message
@@ -279,31 +255,6 @@ macro_rules! lisp { //call internal_lisp! with the default env
         dump: [] )};
 }
 
-// we store an environment as an association list ([var_name_1: val, var_name_2: other_val])
-// to retrieve a value, we create an inner macro with an arm for each key
-macro_rules! env_test {
-    ($arg:ident [$($var_binding:ident : $exp:tt),*]) => {
-        macro_rules! inner_test {
-            $(
-            ($var_binding) => {$exp};
-            )*
-            ($not_found:ident) => {error!("couldn't find value in env ")}; // maybe use concat to include some debug info
-        }
-        inner_test!($arg)
-    }
-}
-
-#[test]
-fn stack_lisp_test() {
-    let top_level_test = lisp!(QUOTE X);
-    lisp!(LAMBDA (x) (CDR x));
-    let hello = dbg!(internal_lisp!(stack: [] env: [] control: [((LAMBDA(x)x)(QUOTE X))] dump: []));
-    let test = dbg!(lisp!((LAMBDA (x) (x (QUOTE (A B)))) CAR));
-    dbg!(internal_lisp!(stack: [] env: [CAR: __CAR] control: [(CAR (QUOTE (a)))] dump: []));
-    lisp!(ATOM (QUOTE X));
-}
-
-// https://doc.rust-lang.org/book/ch11-03-test-organization.html
 
 #[cfg(test)]
 mod tests {
@@ -422,14 +373,15 @@ mod tests {
 
     #[test]
     fn lombda() {
-        let test = lisp!((LOMBDA (X Y) (CONS X Y)) (QUOTE A) NIL);
-        lisp!(PROGN 
+        assert_eq!(lisp!((LOMBDA (X Y) (CONS X Y)) (QUOTE A) NIL), stringify!((A)));
+        
+        assert_eq!(lisp!(PROGN 
             (DEFINE list3 (LOMBDA (X Y Z) (LIST X Y Z)))
-            (DISPLAY (list3 NIL NIL NIL))
+            (DEFINE constant (QUOTE A))
+            (DISPLAY (list3 constant NIL constant))
             (DEFINE print_a (LOMBDA () (DISPLAY (QUOTE A))))
             (print_a)
-        );
-        dbg!(test);
+        ), "A");
     }
 }
 
@@ -455,10 +407,6 @@ mod metacircular {
         );
     }
 
-    // TODO: enable lambdas to have multiple args, by changing it so that (f a b c) evaluates (LIST a b c), puts that on stack, and then evalutes f. ie so that
-    // primitives work on a list of a certain length, instead of a certain number of elements on the stack. Then make CONS special, ie that
-    // (CONS a b) basically gets treated like a special form and rewritten directly, instead of just looked up in env like all the other primitives. 
-    // This gets around the recursive problem in every LIST call using CONS and therefore another LIST call. Dirty hack, but still. 
 }
 
 // Desription of my lisp:

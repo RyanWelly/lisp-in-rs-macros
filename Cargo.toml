@@ -1,5 +1,5 @@
 [package]
-name = "lisp-in-macros"
+name = "lisp-in-rs-macros"
 version = "0.1.0"
 edition = "2021"
 

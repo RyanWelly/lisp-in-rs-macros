@@ -1,6 +1,7 @@
 ## Overview
 
 The internal_lisp! macro emulates a [SECD machine](https://en.wikipedia.org/wiki/SECD_machine). Lisp lists are represented by ($($elem:tt)*) in Rust macros, ie a list of token trees.
+Using the SECD machine for a Lisp is a very old idea; Lispkit Lisp was around in the 1980s.
 The SECD machine uses a stack to store intermediate results, and uses a dump data structure as a sort of "call stack" when evaluating lambda expressions.
 
 
@@ -16,7 +17,7 @@ The SECD machine is wonderfully simple; what the machine does is fully dependent
 
 Think of the lambda calculus as Lisp with only atoms and lambdas that only take a single argument.
 
-Let's consider a simple version of lisp, where all we have are atoms, single argument lambdas, and application. Atoms we can identify with Rust idents; things like `hello` and `A` would be atoms. So we can write simple expressions like `((LAMBDA (X) X) A )`. Essentially, we'll be writing an evaluator for the lambda calculus. Let's step through a SECD machine for this language, evaluating the expression ((LAMBDA (X) X) A ).
+Let's consider a simple version of lisp, where all we have are atoms, single argument lambdas, and application. Atoms we can identify with Rust idents; things like `hello` and `A` would be atoms. So we can write simple expressions like `((LAMBDA (X) X) A )`. Essentially, we'll be writing an evaluator for the lambda calculus. Let's step through a SECD machine for this language, evaluating the expression `((LAMBDA (X) X) A )`.
 
 
 
@@ -46,6 +47,8 @@ We've pushed the closure onto the stack. It stores the expression and the env, a
 TLDR: 
 - If an atom is on top of the control we find its value in the enviroment
 - If a lambda is on top of the control we wrap it into a closure with the current env and push the closure on top of the stack
+- if an application is on top of the control we push an `apply` token on the stack, then the functions, then the arguments (so the arguments get evaluted first)
+- if an `apply` is on top of the control, then we save the current state of our machine to the dump, slurp up the arguments to the closure, and then evaluate that.
 
 If we call the Stack S, the Environment E, the control C, and the Dump D, and use the notation X :: C for the list formed by appending X to the front of a list C, then we can express some of the possible state transition rules as follows:
 
@@ -57,7 +60,7 @@ If we call the Stack S, the Environment E, the control C, and the Dump D, and us
 
 
 
-Once we can evaluate our variant of the lambda calculus, evaluating lisp is relatively trivial. We just need to adjust our machine so that apply works on more than just lambdas/closures, and add support for "special forms", which are lisp functions where the arguments aren't evaluated like normal. These include quote, cond, and define.
+Once we can evaluate our variant of the lambda calculus, extending it to lisp is relatively trivial. We just need to adjust our machine so that apply works on more than just lambdas/closures, and add support for "special forms", which are lisp functions where the arguments aren't evaluated like normal. 
 
 
 

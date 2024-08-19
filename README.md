@@ -33,9 +33,7 @@ Note: dotted lists are not supported, CONS assumes its latter argument is a list
 
 
 ## Metacircular evaluator
-It wouldn't be a proper lisp without me writing a metacircular evaluator for it: 
 TODO
-
 
 
 ## Technical explanation
@@ -49,7 +47,7 @@ Look at EXPLANATION.md. The macro essentially simulates a SECD machine, which is
 
 ## TODO
 
-- Add proper checking that functions are being used with correct arity
+- Add proper checking that functions are being used with correct arity (at the moment, functions just slurp the number of arguments they need right off the stack, which hilariously means that writing (CONS (QUOTE A)) is immediate UB)
 - Write metacircular interpreter
 
 

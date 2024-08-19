@@ -328,15 +328,6 @@ mod tests {
 
     #[test]
     fn conditionals() {
-        // assert_eq!(
-        //     lisp!(COND(
-        //         (EQ (QUOTE A ) (QUOTE B))   (QUOTE B)
-        //         (EQ (QUOTE A ) (QUOTE A))   (QUOTE A)
-        //     )
-
-        //     ),
-        //     "B"
-        // );
         assert_eq!(
             lisp!(COND
                 ((EQ (QUOTE A ) (QUOTE B))  (QUOTE B)) 

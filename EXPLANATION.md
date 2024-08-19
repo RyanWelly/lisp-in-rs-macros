@@ -1,11 +1,14 @@
 ## Overview
 
 The internal_lisp! macro emulates a [SECD machine](https://en.wikipedia.org/wiki/SECD_machine). Lisp lists are represented by ($($elem:tt)*) in Rust macros, ie a list of token trees.
-Using the SECD machine for a Lisp is a very old idea; Lispkit Lisp was around in the 1980s.
-The SECD machine uses a stack to store intermediate results, and uses a dump data structure as a sort of "call stack" when evaluating lambda expressions.
+Using the SECD machine for a Lisp is a very old idea; Lispkit Lisp, originally written in the 80s, famously used a SECD machine as a compiler target. However, we are not really compiling to target the SECD machine, we're just directly interpreting lisp expressions with one.
+The SECD machine has four components: 
+- a stack to store intermediate results,
+- an environement which stores values bound to names,
+- a control stack, the top of which is the expression currently being evaluated and determines the next state of the machine.
+- a dump, which saves the current state of the machine before evaluating the body of a closure. It's the "call stack" of the machine.
 
-
-
+Rust macro's make it surprisingly easy to write state transitions as macro match arms. 
 
 ## Internals
 

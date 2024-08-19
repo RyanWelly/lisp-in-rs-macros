@@ -1,7 +1,13 @@
 # `lisp-in-macros`
 
 
-A simple Lisp interpreter that operates fully in Rust's declarative macros. This means that `lisp!(CAR (CONS (QUOTE A) (QUOTE (B))))` expands to the string "A", all computation happens at compile time by rustc expanding macros. You can imagine that the lisp is a purely functional variant, except for the DISPLAY form which prints a value.
+A simple Lisp interpreter that operates fully in Rust's declarative macros. This means that `lisp!(CAR (CONS (QUOTE A) (QUOTE (B))))` expands to the string "A", all computation happens at compile time by rustc expanding macros. There's no hidden proc macros, no actual 
+ You can imagine that the lisp is a purely functional variant, except for the DISPLAY form which prints a value.
+
+
+## Why
+
+It's a lisp interpreter written fully in Rust's macros, I think that's pretty cool
 
 
 ## Example
@@ -10,13 +16,17 @@ let output = lisp!(CAR (LIST (QUOTE A) (QUOTE B) (QUOTE C)));
 assert_eq!(output, "A");
 
 lisp!(PROGN
-(DEFINE message (QUOTE "hello there"))
-(DISPLAY message)
+(DEFINE message (LAMBDA () (QUOTE "hello there")))
+(DISPLAY (message))
 (DEFINE NOT (LAMBDA (X) (COND (X NIL) (TRUE TRUE))) )
 (DISPLAY (NOT NIL))
 ); // will print "hello there" and "TRUE"
 
 ```
+
+
+
+
 ## Supported forms
 DEFINE
 QUOTE

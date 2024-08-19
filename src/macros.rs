@@ -127,6 +127,7 @@ macro_rules! internal_lisp {
     };
 
     // DISPLAY
+    // TODO - prettify the printed output, especially for closures
     (stack: [__DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         {println!("{}", stringify!($val));
         internal_lisp!(stack: [$val $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
@@ -216,6 +217,14 @@ macro_rules! internal_lisp {
     }; //Termination
 }
 
+
+
+macro_rules! pretty_print_lisp {
+    () => {
+        
+    };
+}
+
 // Helper error handler macro
 // either causes a compiler error with the error message, or evalutes program to a string of the error message. Comment out the first rule if you want to have.
 macro_rules! error {
@@ -283,11 +292,16 @@ mod tests {
 
         assert_eq!(lisp!(CONS (QUOTE A) (QUOTE ())), stringify!((A)));
         assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B C))), stringify!((A B C)));
-        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B))), "(A B)");
+        assert_eq!(lisp!(CONS (QUOTE A) (QUOTE (B))), stringify!((A B)));
         assert_eq!(
             lisp!(CONS (QUOTE A) (CONS (QUOTE B) NIL)),
             stringify!((A B))
         );
+        assert_eq!(lisp!(PROGN
+        (DEFINE test NIL)
+        (EQ test NIL)
+        (EQ (QUOTE A) (QUOTE A))
+        ), "TRUE");
     }
 
     #[test]
@@ -377,15 +391,18 @@ mod metacircular {
             (DISPLAY (tost NIL) )
 
             (DEFINE NOT (LAMBDA (X) (COND (X NIL) (TRUE TRUE))) )
-            (NOT NIL)
+            (DISPLAY (NOT NIL))
 
         ); 
-        dbg!(test);
 
 
-        let recursive_define = lisp!(PROGN
+        let stuff = lisp!(PROGN
         (DEFINE IS_NULL (LAMBDA (X) (EQ X NIL)))
-        (DEFINE AND (LAMBDA (X Z) NIL))
+        (DEFINE and (LAMBDA (x y)
+         (COND (x (COND (y TRUE)
+                 (TRUE NIL)))
+        (TRUE NIL))))
+        (DISPLAY (and TRUE TRUE))
         );
     }
 

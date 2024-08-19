@@ -59,6 +59,9 @@ Look at EXPLANATION.md. The macro essentially simulates a SECD machine, which is
 ## TODO
 
 - Add proper checking that functions are being used with correct arity (at the moment, functions just slurp the number of arguments they need right off the stack, which hilariously means that writing (CONS (QUOTE A)) is immediate UB)
+- Add let
+- Add letrec
+- Add recursive defines
 - Write metacircular interpreter
 
 

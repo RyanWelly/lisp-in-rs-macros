@@ -18,6 +18,20 @@ macro_rules! internal_lisp {
     };
 
 
+    // Let form
+    // (LET (x1 e1) ... (xn en) e) === ((LAMBDA (x1 ... xn ) e ) e1 ... en)
+    // simple transformation, nothing weird.
+
+    // since the naive "(LET $(($xn:tt $en:tt))* $e:tt)" leads to local ambiguity, we need to split it up into the two possibilities.
+
+    (stack: $stack:tt env: $env:tt control: [(LET ($(($xn:tt $en:tt))*) $e:ident) $($controls:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: $stack env: $env control: [  ((LAMBDA ($($xn)* ) $e) $($en)*) $($controls)* ] dump: $dump )
+    };
+    (stack: $stack:tt env: $env:tt control: [(LET ($(($xn:tt $en:tt))*) ($($forms:tt)*)) $($controls:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: $stack env: $env control: [  ((LAMBDA ($($xn)* ) ($($forms)*)) $($en)*) $($controls)* ] dump: $dump )
+    };
+
+
 
 
     // COND special form
@@ -370,6 +384,9 @@ mod tests {
             (DEFINE print_a (LAMBDA () (DISPLAY (QUOTE A))))
             (print_a)
         ), "A");
+
+        assert_eq!(lisp!(DISPLAY (LET ((x (QUOTE BANANA))) x)), "BANANA");
+        assert_eq!(lisp!(LET ((X (QUOTE A)) (Y NIL)) (CONS X Y)), stringify!((A)));
     }
 }
 
@@ -395,6 +412,7 @@ mod metacircular {
         (TRUE NIL))))
         (DISPLAY (and TRUE TRUE))
         );
+        
     }
 
 }

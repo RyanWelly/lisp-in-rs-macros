@@ -56,7 +56,13 @@ macro_rules! internal_lisp {
     }; // truthy case for the __IFS - everything but nil/empty list is true
 
 
+    // If special form - simple desugaring to internal primitive
+    // (IF p e1 e2) === (COND (p e1) (TRUE e2))
 
+
+    (stack: $stack:tt env: $env:tt control: [(IF $p:tt $e1:tt $e2:tt)  $($control:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: $stack env: $env control: [$p {__IFS $e1 $e2 } $($control)*] dump: $dump)
+    };
 
 
 
@@ -69,6 +75,8 @@ macro_rules! internal_lisp {
     // Returns nil.
     // (DEFINE name expr) => expr :: {__DEFINE name}
     // TODO - enable recursive defines somehow - maybe specialise when there is a closure on tbe stack and {__DEFINE: $name} on the control
+    // DEFINE - returns a "recursive closure" (fixpoint?)
+
 
 
 
@@ -82,6 +90,12 @@ macro_rules! internal_lisp {
     (stack: [$value:tt $($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [{__DEFINE:$name:ident} $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [() $($stack)*] env: [$name: $value $($key : $val)*] control: [$($rest)*] dump: $dump )
     };
+
+    // // TODO - finish this off and put it before the __DEFINE rule; specialising on defining a lambda in order to make them recursive
+    // // THIS BRANCH NEVER MATCHES as of now
+    // (stack: [ [{$($vars:ident)*}, $T:tt, $env:tt ] $($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [{__DEFINE:$name:ident} $($rest:tt)*] dump: $dump:tt) => {
+    //     internal_lisp!(stack: [() $($stack)*] env: [$name: [rec @ $name, {$($vars)*}, $T, $env] $($key : $val)*] control: [$($rest)*] dump: $dump )
+    // };
 
     //PROGN special form
     // TODO
@@ -115,6 +129,7 @@ macro_rules! internal_lisp {
 
     // (t1 t2) => t2::t1::ap
     // figure out a nice way to extend this to more args automatically
+    // TODO: replace ap with {ap} everywhere to stop names being bound to the name "ap" crashing the machine.
     (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
     };
@@ -176,6 +191,13 @@ macro_rules! internal_lisp {
 
     // Deal with closures
 
+
+    // //TODO - deal with recursive closures here
+    // // in this rule, just add $name: [rec @ $name {$vars}, $T:tt, [$($key : $value:tt)] to the closure environement, then let the next rule deal with expansion
+    // (stack: [[rec @ $name:ident {$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
+    //     error!(recursive closures not implemented yet)
+    // };
+
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
     // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
     (stack: [[{$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
@@ -233,6 +255,7 @@ macro_rules! internal_lisp {
 
 
 
+// TODO - add pretty printing, because internal representation of closures is incredibly ugly
 macro_rules! pretty_print_lisp {
     () => {
         
@@ -330,6 +353,7 @@ mod tests {
             stringify!((A ((A B C))))
         );
         assert_eq!(lisp!(CAR (LIST (QUOTE A) (QUOTE B))), stringify!(A));
+        lisp!(LIST (CAR (QUOTE (A B C))));
 
     }
 
@@ -359,7 +383,9 @@ mod tests {
             "TRUE"
         );
 
-        // let test = lisp!(COND(EQ)); //incorrect forms will usually just fail with some kind of error.
+        dbg!(lisp!(IF (EQ NIL NIL) (QUOTE A) NIL));
+
+        // let test = lisp!(COND(EQ)); //incorrect forms will usually just fail with some kind of error. 
     }
 
     #[test]
@@ -388,6 +414,47 @@ mod tests {
         assert_eq!(lisp!(DISPLAY (LET ((x (QUOTE BANANA))) x)), "BANANA");
         assert_eq!(lisp!(LET ((X (QUOTE A)) (Y NIL)) (CONS X Y)), stringify!((A)));
     }
+
+
+    #[test]
+    fn append_example() {
+
+        let test = lisp!(LET ((APPEND (LAMBDA (s X Y) (IF (EQ X NIL) Y (CONS (CAR X) (s s (CDR X) Y)))))) (APPEND APPEND (QUOTE (A B)) (QUOTE (C D))));
+        dbg!(test);
+
+    }
+    #[test]
+    fn utility_functions() {
+        let test = lisp!(PROGN
+            (DEFINE IS_NULL (LAMBDA (X) (EQ X NIL)))
+            (DEFINE append (LAMBDA (s X Y) 
+            (PROGN
+                (DISPLAY (LIST (QUOTE "value of x is ") X))
+                (DISPLAY (LIST (QUOTE "value of y is ") Y))
+                (DISPLAY (IF (EQ X NIL) (QUOTE "X IS NIL") (QUOTE "X is not nil")))
+                (IF (EQ X NIL)
+                Y  
+                (CONS (DISPLAY (CAR X)) (s s (CDR X) Y))
+                )
+            )))
+            (append append (QUOTE (ma da) ) (QUOTE (A B)))
+        );
+        dbg!(test);
+        let test = lisp!((LAMBDA (first second) (IF (EQ first NIL) (CAR second) first)) NIL (QUOTE (A)));
+            dbg!(lisp!((LAMBDA (s X Y) 
+                (IF (EQ X NIL)
+                Y  
+                (CONS (DISPLAY (CAR X)) (s s (CDR X) Y))
+                )
+            ) (LAMBDA (s X Y) 
+                (IF (EQ X NIL)
+                Y  
+                (CONS (DISPLAY (CAR X)) (s s (CDR X) Y))
+                )
+            ) (QUOTE (A) ) (QUOTE (h))));
+        // dbg!(test);
+        // dbg!(lisp!((LAMBDA (self x y) (IF (EQ NIL x) y (CONS (CAR x) (self self (CDR x) y))))(LAMBDA (self x y) (IF (EQ NIL x) y (CONS (CAR x) (self self (CDR x) y)))) (QUOTE (C)) (QUOTE (B D))));
+    }
 }
 
 #[cfg(test)]
@@ -414,18 +481,40 @@ mod metacircular {
         );
         
     }
+    #[test]
+    fn quine() {
+       assert_eq!(
+        lisp!
+        ((LAMBDA (s) (LIST s (LIST (QUOTE QUOTE) s)))
+        (QUOTE (LAMBDA (s) (LIST s (LIST (QUOTE QUOTE) s))))), 
+        stringify!
+        (((LAMBDA (s) (LIST s (LIST (QUOTE QUOTE) s)))
+        (QUOTE (LAMBDA (s)(LIST s (LIST (QUOTE QUOTE) s)))))));
+    }
+
+
+    #[test]
+    fn lexical() {
+        // https://stackoverflow.com/questions/32344615/program-to-check-if-the-scoping-is-lexical-or-dynamic
+        assert_eq!(lisp!(PROGN
+            (DEFINE test (LET ((scope (QUOTE lexical))) (LAMBDA () scope)))
+            (LET ((scope (QUOTE dynamic))) (test))
+        ), "lexical");
+    }
+
+
 
 }
 
 // Desription of my lisp:
 
 // a simple LISP with lexical scoping, implemented fully in the Rust macro system.
-// Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda with a single argument, display.
+// Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda, let, display.
 // NIL is a shorthand for the empty list, and the empty list also represents falsity. TRUE and every other value is truthy.
 // The define form is a bit weird in my lisp; (define name expr) evaluates expr and then binds it to name in the current env, so there's no restriction to
-// only using it at the top level like there is in Scheme. It does not allow recursive definitions, so use the Y combinator or similar for recursion.
+// only using it at the top level like there is in Scheme. It does not allow recursive definitions, so use the Y combinator or similar fixpoint operators for recursion.
 
-// hopefully soon: lambda with arbitary arguments, eval primitive, define primitive.
+// hopefully soon:  eval primitive, apply primitve, (recursive) define primitive.
 // maybe add macros?
 // for proof of concept, write a meta circular interpreter (ie just steal Graham's).
 // check if this is lexical https://stackoverflow.com/questions/32344615/program-to-check-if-the-scoping-is-lexical-or-dynamic, I believe it is

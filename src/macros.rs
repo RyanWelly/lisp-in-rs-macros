@@ -9,9 +9,8 @@ macro_rules! internal_lisp {
     };
 
     // LAMBDA special form - saves closure onto stack with current env
-    (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($name:ident) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [[{$name}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
-    };
+    // When we encounter a lambda, we wrap it up into a closure and push it to the stack.
+    // closures store the names of any arguments, the inner expression, and the current env.
 
     (stack: [$($stacks:tt)*] env: $env:tt control: [(LAMBDA ($($names:ident)*) $T:tt) $($controls:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [[{$($names)*}, $T, $env] $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
@@ -137,7 +136,7 @@ macro_rules! internal_lisp {
 
 
     //quick dirty hack for fitting arguments into a list; add a new `cons` opcode, similar to the ap, which just cons the top two values on the stack.
-    // (f a1 a2 a3) => a1 :: {sin} :: a1 :: {cons} :: a2 :: {cons} :: a3 :: {cons} :: f :: ap
+    // (f a1 a2 a3) => NIL :: a1 :: {cons} :: a2 :: {cons} :: a3 :: {cons} :: f :: ap
     
     
     (stack: [ $x:tt () $($stacks:tt)*] env: $env:tt control: [{cons} $($rest:tt)*] dump: $dump:tt) => {
@@ -198,20 +197,6 @@ macro_rules! internal_lisp {
 
 
     // Deal with closures
-
-
-    // //TODO - deal with recursive closures here
-    // // in this rule, just add $name: [rec @ $name {$vars}, $T:tt, [$($key : $value:tt)] to the closure environement, then let the next rule deal with expansion
-    // (stack: [[rec @ $name:ident {$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-    //     error!(recursive closures not implemented yet)
-    // };
-
-    // pop closure from the top of the stack, and the closure's variable is mapped to the value.
-    // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
-    // (stack: [[{$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-    //     internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
-    // };
-
 
 
     //errors if the number of vars is not the same as the number of arguments given.
@@ -282,7 +267,6 @@ macro_rules! lisp { //call internal_lisp! with the default env
 
 #[cfg(test)]
 mod tests {
-    //TODO: maybe use stringify for the correct output instead of raw string literals
     #[test]
     fn primitive_tests() {
         assert_eq!(lisp!(ATOM(QUOTE X)), stringify!(TRUE));
@@ -390,7 +374,6 @@ mod tests {
     #[test]
     fn non_terminating() {
         // This lisp term should never terminate.
-
         // lisp!((LAMBDA (X) (X X))(LAMBDA (Y) (Y Y )));
     }
 
@@ -415,7 +398,7 @@ mod tests {
     fn append_example() {
 
         let test = lisp!(LET ((APPEND (LAMBDA (s X Y) (IF (EQ X NIL) Y (CONS (CAR X) (s s (CDR X) Y)))))) (APPEND APPEND (QUOTE (A B)) (QUOTE (C D))));
-        dbg!(test);
+        assert_eq!(test, stringify!((A B C D)));
 
     }
     #[test]
@@ -436,7 +419,8 @@ mod tests {
         );
         dbg!(test);
         let test = lisp!((LAMBDA (first second) (IF (EQ first NIL) (CAR second) first)) NIL (QUOTE (A)));
-            dbg!(lisp!((LAMBDA (s X Y) 
+        dbg!(test);
+        assert_eq!(lisp!((LAMBDA (s X Y) 
                 (IF (EQ X NIL)
                 Y  
                 (CONS (DISPLAY (CAR X)) (s s (CDR X) Y))
@@ -446,9 +430,7 @@ mod tests {
                 Y  
                 (CONS (DISPLAY (CAR X)) (s s (CDR X) Y))
                 )
-            ) (QUOTE (A) ) (QUOTE (h))));
-        // dbg!(test);
-        // dbg!(lisp!((LAMBDA (self x y) (IF (EQ NIL x) y (CONS (CAR x) (self self (CDR x) y))))(LAMBDA (self x y) (IF (EQ NIL x) y (CONS (CAR x) (self self (CDR x) y)))) (QUOTE (C)) (QUOTE (B D))));
+            ) (QUOTE (A) ) (QUOTE (h))), stringify!((A h)));
     }
 }
 

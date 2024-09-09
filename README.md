@@ -36,11 +36,26 @@ This code expands to:
 stringify!(((LAMBDA (s) (LIST s (LIST (QUOTE QUOTE) s)))
        (QUOTE (LAMBDA (s) (LIST s (LIST (QUOTE QUOTE) s))))));
 ```
-In other words, the code evaluates to itself.
-
-Note; the actual expansions aren't quite as nice to look at.
+In other words, the code evaluates to itself. Isn't that wonderful?
 
 
+
+
+
+## Recursion
+
+This lisp does not support any explicit form of recursion. When we write `(define name exp)` the name binding is not visible in `exp`; all define does is evaluate the exp in the current environment and then bind that value to name. We don't have recursion, but secretly we had it all along. All we need is lambda.
+
+Let's take the example of writing a function `append` which takes two lists, and returns the concatenation of the lists. If we try and define this naively in our lisp:
+
+
+```rust
+(DEFINE append 
+    (LAMBDA (self X Y) 
+        (COND 
+            ((EQ X NIL) Y) 
+            (TRUE (CONS (CAR X) (self self (CDR X) Y))) 
+        )))
 
 
 
@@ -60,7 +75,7 @@ EQ
 ATOM
 ```
 
-Note: dotted lists are not supported, CONS assumes its latter argument is a list. Define does not handle recursive definitions.
+Note: dotted lists are not supported, CONS assumes its latter argument is a list. Define does not handle recursive definitions, it's more like Schemes internal definitions than a true lispy define.
 
 
 ## Metacircular evaluator
@@ -79,7 +94,7 @@ Look at EXPLANATION.md. The macro essentially simulates a SECD machine, which is
 
 ## TODO
 
-- Add proper checking that functions are being used with correct arity (at the moment, procedures just slurp the number of arguments they need right off the stack, which hilariously means that writing (CONS (QUOTE A)) is immediate UB)
+- Add proper error message for when primitives are called with the wrong arguments?
 - Add letrec
 - Add recursive defines
 - Write metacircular interpreter

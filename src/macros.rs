@@ -75,7 +75,7 @@ macro_rules! internal_lisp {
     // Returns nil.
     // (DEFINE name expr) => expr :: {__DEFINE name}
     // TODO - enable recursive defines somehow - maybe specialise when there is a closure on tbe stack and {__DEFINE: $name} on the control
-    // DEFINE - returns a "recursive closure" (fixpoint?)
+    // maybe return a "recursive closure" (fixpoint?)
 
 
 
@@ -91,14 +91,7 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [() $($stack)*] env: [$name: $value $($key : $val)*] control: [$($rest)*] dump: $dump )
     };
 
-    // // TODO - finish this off and put it before the __DEFINE rule; specialising on defining a lambda in order to make them recursive
-    // // THIS BRANCH NEVER MATCHES as of now
-    // (stack: [ [{$($vars:ident)*}, $T:tt, $env:tt ] $($stack:tt)*] env: [$($key:ident : $val:tt)*] control: [{__DEFINE:$name:ident} $($rest:tt)*] dump: $dump:tt) => {
-    //     internal_lisp!(stack: [() $($stack)*] env: [$name: [rec @ $name, {$($vars)*}, $T, $env] $($key : $val)*] control: [$($rest)*] dump: $dump )
-    // };
-
     //PROGN special form
-    // TODO
     // basically a hack to be able to write multiple lisp expressions
     // (PROGN e1 e2 .. eN) evalutes to the value of eN, but evaluates each expression in order
 
@@ -118,8 +111,9 @@ macro_rules! internal_lisp {
 
     // List - not a special form, but needs special handling since it's varadic
 
-    (stack: $stack:tt env: $env:tt control: [(LIST $head:tt $($args:tt)*)  $($control:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: $stack env: $env control: [(CONS $head (LIST $($args)*)) $($control)*] dump: $dump)
+
+   (stack: $stack:tt env: $env:tt control: [(LIST $($args:tt)+)  $($control:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: $stack env: $env control: [ NIL $($args {cons})+ $($control)*] dump: $dump)
     };
 
     (stack: $stack:tt env: $env:tt control: [(LIST)  $($control:tt)*] dump: $dump:tt) => {
@@ -130,49 +124,63 @@ macro_rules! internal_lisp {
     // (t1 t2) => t2::t1::ap
     // figure out a nice way to extend this to more args automatically
     // TODO: replace ap with {ap} everywhere to stop names being bound to the name "ap" crashing the machine.
-    (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
-    };
-    (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $($args:tt)*) $($rest:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$($args)* $op ap $($rest)*] dump: $dump)
+    // (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
+    //     internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
+    // };
+    // (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $($args:tt)*) $($rest:tt)*] dump: $dump:tt) => {
+    //     internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$($args)* $op ap $($rest)*] dump: $dump)
+    // };
+
+    (stack: $stack:tt env: $env:tt control: [($op:tt $($args:tt)*) $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: $stack env: $env control: [NIL $($args {cons})* $op ap $($rest)* ] dump: $dump)
     };
 
 
+    //quick dirty hack for fitting arguments into a list; add a new `cons` opcode, similar to the ap, which just cons the top two values on the stack.
+    // (f a1 a2 a3) => a1 :: {sin} :: a1 :: {cons} :: a2 :: {cons} :: a3 :: {cons} :: f :: ap
+    
+    
+    (stack: [ $x:tt () $($stacks:tt)*] env: $env:tt control: [{cons} $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [($x) $($stacks)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+    (stack: [$y:tt ($($vals:tt)*)  $($stacks:tt)*] env: $env:tt control: [{cons} $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [($($vals)* $y) $($stacks)* ] env: $env control: [$($rest)*] dump: $dump)
+    };
 
     // Evaluate primitives - top of the stack
 
 
     // CAR
-    (stack: [__CAR ($car:tt $($cdr:tt)*) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CAR (($car:tt $($cdr:tt)*)) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [$car $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
     // CDR
-    (stack: [__CDR ($car:tt) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CDR (($car:tt)) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [() $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
-    (stack: [__CDR ($car:tt $($cdrs:tt)* ) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CDR (($car:tt $($cdrs:tt)* )) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [($($cdrs)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
     // DISPLAY
     // TODO - prettify the printed output, especially for closures
-    (stack: [__DISPLAY $val:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+    (stack: [__DISPLAY ($val:tt) $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         {println!("{}", stringify!($val));
         internal_lisp!(stack: [$val $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
 
     //ATOM 
-    (stack: [__ATOM $atom:ident $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+    (stack: [__ATOM ($atom:ident) $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
-    (stack: [__ATOM $not_atom:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
+    (stack: [__ATOM ($not_atom:tt) $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ () $($stacks)*] env: $env control: [$($controls)*] dump: $dump)
     };
 
     // EQ 
-    (stack: [__EQ $val1:tt $val2:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {{
+    (stack: [__EQ ($val1:tt $val2:tt) $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {{
         macro_rules! __internal_eq {
             ($val1 $val1) => {internal_lisp!(stack: [TRUE $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
             ($val1 $val2) => {internal_lisp!(stack: [() $($stacks)*] env: $env control: [$($controls)*] dump: $dump)};
@@ -181,10 +189,10 @@ macro_rules! internal_lisp {
     };
 
     // CONS 
-    (stack: [__CONS  () $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CONS ($val:tt ()) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ ($val)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
-    (stack: [__CONS ($($list:tt)*) $val:tt $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+    (stack: [__CONS ($val:tt ($($list:tt)*)) $($stack_entries:tt)*] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [ ($val $($list)*)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
@@ -200,29 +208,16 @@ macro_rules! internal_lisp {
 
     // pop closure from the top of the stack, and the closure's variable is mapped to the value.
     // (Closure :: v :: Stack, e, ap::c, d) => ([], Closure's env extended, Closure's code, (Stack, e, c)::dump)
-    (stack: [[{$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-        internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
-    };
+    // (stack: [[{$var:ident}, $T:tt, [$($key:ident : $value:tt)*]] $v:tt $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
+    //     internal_lisp!(stack: [] env: [$var:$v $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
+    // };
 
-    // order of args stored in the closure is in the wrong order compared to the order of operands on the stack, so first we reverse.
-    // TODO - find a better way of doing this than recursively reversing and then zipping
-    (stack: [[{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*]) => {
-        internal_lisp!(@rev ($($vars)*) () stack: [$($stacks)*] env: [ $($key:$value)*] control: [$T] dump: [([$($stacks)*], $env, [$($controls)*]) $($dump)*])
-    };
 
-    // recursively reverse the list of idents from the closure, then match them one by one with the matching value on the stack
-    // TODO: refactor system so every opcode takes a list, then this might be easier
-    (@rev ($var:ident $($vars:ident)*) ($($reversed:ident)*) stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt) => {
-        internal_lisp!(@rev ($($vars)*) ($var $($reversed)*) stack: $stack env: $env control: $control dump: $dump)
-    };
-    (@rev () ($($vars:ident)*) stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt) => {
-        internal_lisp!(@load ($($vars)*) stack: $stack env: $env control: $control dump: $dump)
-    };
-    (@load  ($var:ident $($vars:ident)*) stack: [$top:tt $($stacks:tt)*] env: [$($key:ident : $value:tt)*] control: $control:tt dump: $dump:tt  ) => {
-        internal_lisp!(@load ($($vars)*) stack: [$($stacks)*] env: [$var: $top $($key : $value)* ] control: $control dump: $dump)
-    };
-    (@load  () stack: $stack:tt env: $env:tt control: $control:tt dump: $dump:tt  ) => {
-        internal_lisp!(stack: $stack env: $env control: $control dump: $dump)
+
+    //errors if the number of vars is not the same as the number of arguments given.
+    (stack: [ [{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] ($($args_list_entry:tt)*) $($stacks:tt)*]  env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*] ) => {
+        internal_lisp!(stack: [] env: [$($vars : $args_list_entry )* $($key: $value)*] control: [$T] dump: [  ([$($stacks)*], $env, [$($controls)*]) $($dump)*])
+        
     };
 
     // done processing the current closure, pop stack/env/control off the dump and continue evaluating

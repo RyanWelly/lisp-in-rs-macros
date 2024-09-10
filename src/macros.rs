@@ -174,10 +174,16 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [ ($val $($list)*)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
-    // List
+    // LIST
     (stack: [__LIST ($($vals:tt)*) $($stack_entries:tt)* ] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: [($($vals)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
+
+    // APPLY
+    (stack: [__APPLY ($f:tt ($($args:tt)*))  $($rest:tt)* ] env: $env:tt control: [ap $($control:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [$f ($($args)*) $($rest)*] env: $env control: [ap $($control)*] dump: $dump )
+    };
+
 
 
     // Deal with closures
@@ -243,6 +249,7 @@ macro_rules! lisp { //call internal_lisp! with the default env
         EQ: __EQ
         CONS: __CONS
         LIST: __LIST
+        APPLY: __APPLY
         NIL: ()
         TRUE: TRUE]
         control: [($($toks)*)]
@@ -376,6 +383,13 @@ mod tests {
 
         assert_eq!(lisp!(DISPLAY (LET ((x (QUOTE BANANA))) x)), "BANANA");
         assert_eq!(lisp!(LET ((X (QUOTE A)) (Y NIL)) (CONS X Y)), stringify!((A)));
+
+        assert_eq!(lisp!((CAR(LIST (LAMBDA (X) X) (LAMBDA (X) NIL))) (QUOTE swim)), stringify!(swim));
+    }
+
+    #[test]
+    fn apply() {
+        assert_eq!(lisp!(APPLY LIST (QUOTE (A B))), stringify!((A B)));
     }
 
 

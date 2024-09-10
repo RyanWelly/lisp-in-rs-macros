@@ -144,7 +144,7 @@ macro_rules! internal_lisp {
     // DISPLAY
     // TODO - prettify the printed output, especially for closures
     (stack: [__DISPLAY ($val:tt) $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
-        {println!("{}", stringify!($val));
+        {println!("{}", prettify_lisp!($val));
         internal_lisp!(stack: [$val $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
     };
 
@@ -218,22 +218,19 @@ macro_rules! internal_lisp {
 
 
     (stack: [$top:tt $($rest:tt)*] env: [$($envs:tt)*] control: [] dump: []  ) => {
-        stringify!($top)
+        prettify_lisp!($top)
     }; //Termination
 }
 
 
-
-// TODO - add pretty printing, because internal representation of closures is incredibly ugly
-macro_rules! pretty_print_lisp {
-    //prettify closures - we display as a lambda form, surrounded by square brackets.
-    () => {
-        
-    };
+// Pretty printing to make the printed representation of closures nicer. 
+macro_rules! prettify_lisp {
+    ([{$($vars:ident)*}, $T:tt, $env:tt]) => {stringify!([PROC ($($vars)*) $T ])};
+    ($($toks:tt)*) => {stringify!($($toks)*)}; //for anything other than a closure, just return 
 }
 
 // Helper error handler macro
-// either causes a compiler error with the error message, or evalutes program to a string of the error message. Comment out the first rule if you want to have.
+// either causes a compiler error with the error message, or evalutes program to a string of the error message. 
 macro_rules! error {
     ($($toks:tt)+) => {compile_error!(stringify!($($toks)+))}; //program halts rust compilation with the error message
     ($($toks:tt)*) => {println!("{}", stringify!($($toks)*))};  
@@ -385,6 +382,7 @@ mod tests {
         assert_eq!(lisp!(LET ((X (QUOTE A)) (Y NIL)) (CONS X Y)), stringify!((A)));
 
         assert_eq!(lisp!((CAR(LIST (LAMBDA (X) X) (LAMBDA (X) NIL))) (QUOTE swim)), stringify!(swim));
+        dbg!(lisp!(LAMBDA () (DISPLAY NIL))); 
     }
 
     #[test]

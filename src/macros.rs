@@ -106,29 +106,8 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [($($rest)+) $($stack)*] env: $env control: [{__LAST} $($control)*] dump: $dump)
     };
 
-
-
-    // List - not a special form, but needs special handling since it's varadic
-
-
-   (stack: $stack:tt env: $env:tt control: [(LIST $($args:tt)+)  $($control:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: $stack env: $env control: [ NIL $($args {cons})+ $($control)*] dump: $dump)
-    };
-
-    (stack: $stack:tt env: $env:tt control: [(LIST)  $($control:tt)*] dump: $dump:tt) => {
-        internal_lisp!(stack: $stack env: $env control: [NIL $($control)*] dump: $dump)
-    };
-
-
     // (t1 t2) => t2::t1::ap
-    // figure out a nice way to extend this to more args automatically
-    // TODO: replace ap with {ap} everywhere to stop names being bound to the name "ap" crashing the machine.
-    // (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $arg:tt) $($rest:tt)*] dump: $dump:tt) => {
-    //     internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$arg $op ap $($rest)*] dump: $dump)
-    // };
-    // (stack: [$($stack_entries:tt)*] env: $env:tt control: [($op:tt $($args:tt)*) $($rest:tt)*] dump: $dump:tt) => {
-    //     internal_lisp!(stack: [ $($stack_entries)*] env: $env control: [$($args)* $op ap $($rest)*] dump: $dump)
-    // };
+    // (f a1 a2 a3 ..) expands to essentially (LIST a1 a2 a3 ...) :: f :: ap
 
     (stack: $stack:tt env: $env:tt control: [($op:tt $($args:tt)*) $($rest:tt)*] dump: $dump:tt) => {
         internal_lisp!(stack: $stack env: $env control: [NIL $($args {cons})* $op ap $($rest)* ] dump: $dump)
@@ -195,6 +174,11 @@ macro_rules! internal_lisp {
         internal_lisp!(stack: [ ($val $($list)*)  $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
     };
 
+    // List
+    (stack: [__LIST ($($vals:tt)*) $($stack_entries:tt)* ] env: $env:tt control: [ap $($rest:tt)*] dump: $dump:tt) => {
+        internal_lisp!(stack: [($($vals)*) $($stack_entries)*] env: $env control: [$($rest)*] dump: $dump)
+    };
+
 
     // Deal with closures
 
@@ -210,7 +194,6 @@ macro_rules! internal_lisp {
     (stack:[$val:tt $($stack_entries:tt)*] env: $env:tt control: [] dump: [ ([$($prev_stack:tt)*], $prev_env:tt, $prev_control:tt) $($rest_of_dump:tt)* ]  ) => {
         internal_lisp!(stack: [$val $($prev_stack)*] env: $prev_env control: $prev_control dump: [$($rest_of_dump)*])
     };
-
 
 
     // Evaluate symbol in environment
@@ -237,6 +220,7 @@ macro_rules! internal_lisp {
 
 // TODO - add pretty printing, because internal representation of closures is incredibly ugly
 macro_rules! pretty_print_lisp {
+    //prettify closures - we display as a lambda form, surrounded by square brackets.
     () => {
         
     };
@@ -258,6 +242,7 @@ macro_rules! lisp { //call internal_lisp! with the default env
         DISPLAY:__DISPLAY
         EQ: __EQ
         CONS: __CONS
+        LIST: __LIST
         NIL: ()
         TRUE: TRUE]
         control: [($($toks)*)]
@@ -432,29 +417,31 @@ mod tests {
                 )
             ) (QUOTE (A) ) (QUOTE (h))), stringify!((A h)));
     }
+    #[test]
+    fn recursion() {
+        // lisp!(PROGN
+        //     (DEFINE Y
+        //         (LAMBDA (h)
+        //             ((LAMBDA (x) (h (LAMBDA (a) ((x x) a))))
+        //             (LAMBDA (x) (h (LAMBDA (a) ((x x) a)))))))
+        //     (DEFINE APPEND (Y (LAMBDA (append) (LAMBDA (w z) (IF (EQ w NIL) z (CONS (CAR w) (append (CDR w) z)))))))
+        //     (APPEND (QUOTE (A)) (QUOTE (B C)))
+            
+        // ); 
+        // using Y combinator for functions that take a single argument! invalid!
+
+        lisp!(PROGN
+        (DEFINE TEST NIL)
+        );
+    }
 }
 
 #[cfg(test)]
 mod metacircular {
     #[test]
     fn metacircular() {
-        let test = lisp!(PROGN
-            (DEFINE tost (LAMBDA (X) (DISPLAY (QUOTE t))))
-            (DISPLAY (tost NIL) )
-
-            (DEFINE NOT (LAMBDA (X) (COND (X NIL) (TRUE TRUE))) )
-            (DISPLAY (NOT NIL))
-
-        ); 
-
-
-        let stuff = lisp!(PROGN
-        (DEFINE IS_NULL (LAMBDA (X) (EQ X NIL)))
-        (DEFINE and (LAMBDA (x y)
-         (COND (x (COND (y TRUE)
-                 (TRUE NIL)))
-        (TRUE NIL))))
-        (DISPLAY (and TRUE TRUE))
+        lisp!(PROGN
+            (DEFINE NULL (LAMBDA (X) (EQ X NIL)))
         );
         
     }

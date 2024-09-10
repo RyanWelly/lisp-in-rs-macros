@@ -1,13 +1,11 @@
 # `lisp-in-rs-macros`
 
 
-A simple, lexically scoped Lisp interpreter that operates fully in Rust's declarative macros. The `lisp!` macro expands to the lisp value computed by the code, and then stringifies it. This means that `lisp!(CAR (CONS (QUOTE A) (QUOTE (B))))` expands to the string "A" and that all this computation happens at compile time by rustc expanding macros. There's no hidden proc macros, no actual rust code walking an AST, just Rust macros enjoying being turing complete. 
-The lisp implemented is close to being purely functional in the programming sense, except for the DISPLAY form which expands to a `println!("{}", stringify(...)` call.
-
+A simple, lexically scoped Lisp interpreter that operates fully in Rust's declarative macros. The `lisp!` macro expands to the lisp value computed by the code, and then stringifies it. This means that `lisp!(CAR (CONS (QUOTE A) (QUOTE (B))))` expands to the string "A" and that all this computation happens at compile time by rustc expanding macros. 
 
 ## Why
 
-It's a lisp interpreter written fully in Rust's macros, I think that's pretty cool. It's also less than 300 lines, which is neat.
+It's a lisp interpreter written fully in Rust's macros, I think that's pretty cool. It's also less than 250 lines, which is neat. 
 
 
 ## Example
@@ -44,42 +42,48 @@ In other words, the code evaluates to itself. Isn't that wonderful?
 
 ## Recursion
 
-This lisp does not support any explicit form of recursion. When we write `(define name exp)` the name binding is not visible in `exp`; all define does is evaluate the exp in the current environment and then bind that value to name. We don't have recursion, but secretly we had it all along. All we need is lambda.
+This lisp does not currently support any explicit form of recursion. Luckily, explicit recursion is not needed, all we need is lambda.
 
-Let's take the example of writing a function `append` which takes two lists, and returns the concatenation of the lists. If we try and define this naively in our lisp:
+You can write a simple function that appends two lists by using self application:
 
 
 ```rust
+lisp!(PROGN
 (DEFINE append 
     (LAMBDA (self X Y) 
         (COND 
             ((EQ X NIL) Y) 
             (TRUE (CONS (CAR X) (self self (CDR X) Y))) 
         )))
+(append append (QUOTE (A B)) (QUOTE (C D)))
+
+)
+```
+This results in "(A B C D)". Wonderful!
 
 
+## Notes for use
+The lisp! macro only evaluates a single expression; if you want to evaluate multiple expressions, use `(PROGN expr1 expr2 expr3)`. This evaluates all the expressions, and returns the value of the last expression. The DISPLAY form evaluates a single expression, then expands to `println!(stringify!(...))`. The empty list is not self evaluating, you can use NIL or (QUOTE ()) to obtain an empty list value. The empty list is the sole "falsy" object. 
+Dotted lists aren't supported, cons assumes its last argument is a list.
 
 
 ## Supported forms
 ```rust
-DEFINE
-QUOTE
-LAMBDA
+DEFINE 
+QUOTE 
+LAMBDA 
 LET
-PROGN
+PROGN 
 CAR 
 CDR 
 CONS
 LIST
 EQ
 ATOM
+APPLY
 ```
 
-Note: dotted lists are not supported, CONS assumes its latter argument is a list. Define does not handle recursive definitions, it's more like Schemes internal definitions than a true lispy define.
-
-
-## Metacircular evaluator
-TODO
+Note: dotted lists are not supported, CONS assumes its latter argument is a list. Define does not handle recursive definitions, it's more like internal definitions in Scheme than a true lispy define.
 
 
 ## Technical explanation

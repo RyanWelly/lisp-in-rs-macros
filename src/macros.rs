@@ -404,9 +404,6 @@ mod tests {
             (DEFINE IS_NULL (LAMBDA (X) (EQ X NIL)))
             (DEFINE append (LAMBDA (s X Y) 
             (PROGN
-                (DISPLAY (LIST (QUOTE "value of x is ") X))
-                (DISPLAY (LIST (QUOTE "value of y is ") Y))
-                (DISPLAY (IF (EQ X NIL) (QUOTE "X IS NIL") (QUOTE "X is not nil")))
                 (IF (EQ X NIL)
                 Y  
                 (CONS (DISPLAY (CAR X)) (s s (CDR X) Y))
@@ -414,9 +411,7 @@ mod tests {
             )))
             (append append (QUOTE (ma da) ) (QUOTE (A B)))
         );
-        dbg!(test);
-        let test = lisp!((LAMBDA (first second) (IF (EQ first NIL) (CAR second) first)) NIL (QUOTE (A)));
-        dbg!(test);
+        assert_eq!(test, stringify!((ma da A B)));
         assert_eq!(lisp!((LAMBDA (s X Y) 
                 (IF (EQ X NIL)
                 Y  
@@ -427,7 +422,7 @@ mod tests {
                 Y  
                 (CONS (DISPLAY (CAR X)) (s s (CDR X) Y))
                 )
-            ) (QUOTE (A) ) (QUOTE (h))), stringify!((A h)));
+            ) (QUOTE (A B) ) (QUOTE (h a))), stringify!((A B h a)));
     }
     #[test]
     fn recursion() {
@@ -457,33 +452,41 @@ mod metacircular {
     fn meta() {
         // simple lisp interpreter - does not support lambda
         let test: &str = lisp!(PROGN
-            //helper for recursion
+            // Y "combinator" for two arguments
         (DEFINE Y2 
                         (LAMBDA (h)
                             ((LAMBDA (x) (h (LAMBDA (a b) ((x x) a b))))
                                 (LAMBDA (x) (h (LAMBDA (a b) ((x x) a b)))))))
         
         (DEFINE CADR (LAMBDA (X) (CAR (CDR X))))
-        (DEFINE UNIMPLEMENTED (LAMBDA () (DISPLAY (QUOTE "UNIMPLEMENTED"))))
+        (DEFINE CADDR (LAMBDA (X) (CAR (CDR (CDR X)))))
+        (DEFINE UNIMPLEMENTED (LAMBDA () (DISPLAY (QUOTE UNIMPLEMENTED))))
 
             
-        (DEFINE eval (LAMBDA (E A) 
+        // using lowercase for the interpreted language, just to be clearer.
+        (DEFINE eval (Y2 (LAMBDA (EVAL) (LAMBDA (E A) 
                 (COND
                     ((ATOM E) (UNIMPLEMENTED))
                     ((ATOM (CAR E)) 
-                        // (IF (EQ (CAR E) (QUOTE QUOTE)) (CADR E) (UNIMPLEMENTED) )
                         (COND 
-                            ((EQ (CAR E) (QUOTE QUOTE)) (CADR E))
+                            ((EQ (CAR E) (QUOTE quote)) (CADR E))
+                            ((EQ (CAR E) (QUOTE atom)) (ATOM (EVAL (CADR E) A)))
+                            ((EQ (CAR E) (QUOTE car)) (CAR (EVAL (CADR E) A)))
+                            ((EQ (CAR E) (QUOTE cdr)) (CDR (EVAL (CADR E) A)))
+                            ((EQ (CAR E) (QUOTE equal)) (EQ (EVAL (CADR E) A) (EVAL (CADDR E) A)))
                             (TRUE (UNIMPLEMENTED))
                         )
                     )
                 
                 )
-            ))
-        (DISPLAY (QUOTE "eval stuff"))
-        (eval (QUOTE (QUOTE (A))) NIL)
+            ))))
+
+        // (eval (QUOTE (quote (A))) NIL)
+        // (eval (QUOTE (atom (quote A))) NIL )
+        // (eval (QUOTE (cdr (cdr (quote (A B))))) NIL)
+        (eval (QUOTE (equal (quote a) (quote a)))NIL)
         );
-        assert_eq!(test, "(A)")
+        assert_eq!(test, "TRUE")
         
 
         // the same simple lisp interpreter, this time it supports single argument lambda

@@ -431,16 +431,16 @@ mod tests {
     }
     #[test]
     fn recursion() {
-        // lisp!(PROGN
-        //     (DEFINE Y
-        //         (LAMBDA (h)
-        //             ((LAMBDA (x) (h (LAMBDA (a) ((x x) a))))
-        //             (LAMBDA (x) (h (LAMBDA (a) ((x x) a)))))))
-        //     (DEFINE APPEND (Y (LAMBDA (append) (LAMBDA (w z) (IF (EQ w NIL) z (CONS (CAR w) (append (CDR w) z)))))))
-        //     (APPEND (QUOTE (A)) (QUOTE (B C)))
+        let test = lisp!(PROGN
+            (DEFINE Y
+                (LAMBDA (h)
+                    ((LAMBDA (x) (h (LAMBDA (a b) ((x x) a b))))
+                    (LAMBDA (x) (h (LAMBDA (a b) ((x x) a b)))))))
+            (DEFINE APPEND (Y (LAMBDA (append) (LAMBDA (w z) (IF (EQ w NIL) z (CONS (CAR w) (append (CDR w) z)))))))
+            (APPEND (QUOTE (A)) (QUOTE (B C)))
             
-        // ); 
-        // using Y combinator for functions that take a single argument! invalid!
+        ); 
+        dbg!(test);
 
         lisp!(PROGN
         (DEFINE TEST NIL)
@@ -450,13 +450,47 @@ mod tests {
 
 #[cfg(test)]
 mod metacircular {
+    
+
+
     #[test]
-    fn metacircular() {
-        lisp!(PROGN
-            (DEFINE NULL (LAMBDA (X) (EQ X NIL)))
-        );
+    fn meta() {
+        // simple lisp interpreter - does not support lambda
+        let test: &str = lisp!(PROGN
+            //helper for recursion
+        (DEFINE Y2 
+                        (LAMBDA (h)
+                            ((LAMBDA (x) (h (LAMBDA (a b) ((x x) a b))))
+                                (LAMBDA (x) (h (LAMBDA (a b) ((x x) a b)))))))
         
+        (DEFINE CADR (LAMBDA (X) (CAR (CDR X))))
+        (DEFINE UNIMPLEMENTED (LAMBDA () (DISPLAY (QUOTE "UNIMPLEMENTED"))))
+
+            
+        (DEFINE eval (LAMBDA (E A) 
+                (COND
+                    ((ATOM E) (UNIMPLEMENTED))
+                    ((ATOM (CAR E)) 
+                        // (IF (EQ (CAR E) (QUOTE QUOTE)) (CADR E) (UNIMPLEMENTED) )
+                        (COND 
+                            ((EQ (CAR E) (QUOTE QUOTE)) (CADR E))
+                            (TRUE (UNIMPLEMENTED))
+                        )
+                    )
+                
+                )
+            ))
+        (DISPLAY (QUOTE "eval stuff"))
+        (eval (QUOTE (QUOTE (A))) NIL)
+        );
+        assert_eq!(test, "(A)")
+        
+
+        // the same simple lisp interpreter, this time it supports single argument lambda
     }
+
+        
+    
     #[test]
     fn quine() {
        assert_eq!(
@@ -493,4 +527,3 @@ mod metacircular {
 // hopefully soon:  eval primitive, apply primitve, (recursive) define primitive.
 // maybe add macros?
 // for proof of concept, write a meta circular interpreter (ie just steal Graham's).
-// check if this is lexical https://stackoverflow.com/questions/32344615/program-to-check-if-the-scoping-is-lexical-or-dynamic, I believe it is

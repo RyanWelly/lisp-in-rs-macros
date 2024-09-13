@@ -16,6 +16,8 @@ In our SECD machine, we have the stack, the environment, the control, and the du
 Intermediate results are stored on the stack, the environment is an associative array of variable bindings, the control is a stack of lisp expressions to evaluate, and the dump holds state when we're evaluating the inner expression of a lambda.
 
 When you write `lisp!(CONS (QUOTE A) (QUOTE (B)))` it gets expanded to  
+
+
 `internal_lisp!(stack: [] env: {} control: ((ATOM (QUOTE A))) dump: []).  `
 
 

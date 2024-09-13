@@ -16,9 +16,9 @@ In our SECD machine, we have the stack, the environment, the control, and the du
 Intermediate results are stored on the stack, the environment is an associative array of variable bindings, the control is a stack of lisp expressions to evaluate, and the dump holds state when we're evaluating the inner expression of a lambda.
 
 When you write `lisp!(CONS (QUOTE A) (QUOTE (B)))` it gets expanded to  
-`internal_lisp!(stack: [] env: {} control: ((ATOM (QUOTE A))) dump: []).  
+`internal_lisp!(stack: [] env: {} control: ((ATOM (QUOTE A))) dump: []).  `
 
-`
+
 First, we evaluate the arguments to functions before we evaluate the actual function. So we rewrite this to:
 
 
@@ -159,5 +159,5 @@ In practise, this does lead to a explosion in the size of the generated, since t
 
 ## Metacircular evaluation and Recursion
 
-Currently, the lisp implemented seems to be missing a key element; recursion. We can get around this by using the Y combinator, and implement a lisp interpreter in our lisp, like the one listed in README.md. But this is brutally inefficient; everytime our lisp creates a closure, it copies the entire environment into that closure; this quickly becomes too much to handle for rustc.
+Currently, the lisp implemented seems to be missing a key element; recursion. We can get around this by using the Y combinator, and implement a lisp interpreter in our lisp, like the one listed in README.md. But this is brutally inefficient; everytime our lisp creates a closure, it copies the entire environment into that closure. This quickly becomes too much to handle for rustc, as for some reason rustc isn't optimised for declarative macros generating millions of tokens and immediately passing it to a macro.
 

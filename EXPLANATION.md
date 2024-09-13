@@ -54,21 +54,46 @@ And both the dump and control are empty, so we halt. TRUE is the evaluated outpu
 
 For evaluating lisp code that only involves simple primitives like quote, cons, cdr and friends, the control and the stack is all we need. For evaluating lambdas, we add an environment and a dump. Let's walk through how we evaluate `((LAMBDA (X) X) (QUOTE A))`, ie applying the identity function to an argument.
 
+
+
+
 `internal_lisp!(stack: [] env: [] control: ( ((LAMBDA (X) X) (QUOTE A))  ) dump: []).  `
+
+
+
 
 As usual, we first evaluate the arguments before we evaluate the function. I'll skip that step:
 
+
 `internal_lisp!(stack: [A] env: [] control: ( (LAMBDA (X) X) ap  ) dump: []).  `
+
+
 So we have the atom A on the stack, and we want to apply the identity function to it. Our first step is to evalute the lambda itself, which results in a closure which stores the code, current environment, and a variable reference:
+
+
 `internal_lisp!(stack: [ [{X}, X, []] A] env: [] control: ( ap  ) dump: []).  `
+
+
 Now the top of the stack is a closure. How do we apply the closure to the argument? First we save the current stack, current control, and current env to the dump, and then we replace the control stack with the inner "code" of the closure, replace the env with our closure's env, and bind the variable X to our argument A.
 
+
+
 `internal_lisp!(stack: [] env: [X: A] control: ( X ) dump: [((), (), ())]).  `
+
+
 Now we have a single atom on top of the control; so we look it up in the environment. This evaluates to A, so:
 
+
 `internal_lisp!(stack: [A] env: [X: A] control: ( ) dump: [((), (), ())]).  `
+
+
 Now control is empty, so we go up a level and return to the previous code by slurping it up from the dump (this is how our machine supports calling arbitary nested lambdas).
+
+
 `internal_lisp!(stack: [A] env: [] control: ( ) dump: []).  `
+
+
+
 We finish with a single value on the stack, and our control and dumps are empty, so we stop execution. We've just successfully used the identity function!
 
 ## Some macro hacks

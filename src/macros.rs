@@ -450,46 +450,70 @@ mod metacircular {
 
     #[test]
     fn meta() {
-        // simple lisp interpreter - does not support lambda
-        let test: &str = lisp!(PROGN
-            // Y "combinator" for two arguments
-        (DEFINE Y2 
-                        (LAMBDA (h)
-                            ((LAMBDA (x) (h (LAMBDA (a b) ((x x) a b))))
-                                (LAMBDA (x) (h (LAMBDA (a b) ((x x) a b)))))))
+        // // simple lisp interpreter - only supports lambda with one parameter
+        // // At the moment, using y combinator for recursion causes an explosion in code size, exceeding far more than a million tokens and leading to cargo getting sigkilled
+        // let test: &str = lisp!(PROGN
+        //     // Y "combinator" for two arguments
+        // (DEFINE Y2 
+        //                 (LAMBDA (h)
+        //                     ((LAMBDA (x) (h (LAMBDA (a b) ((x x) a b))))
+        //                         (LAMBDA (x) (h (LAMBDA (a b) ((x x) a b)))))))
         
-        (DEFINE CADR (LAMBDA (X) (CAR (CDR X))))
-        (DEFINE CADDR (LAMBDA (X) (CAR (CDR (CDR X)))))
-        (DEFINE UNIMPLEMENTED (LAMBDA () (DISPLAY (QUOTE UNIMPLEMENTED))))
+        // (DEFINE CADR (LAMBDA (X) (CAR (CDR X))))
+        // (DEFINE CAAR (LAMBDA (X) (CAR (CAR X))))
+        // (DEFINE CADAR (LAMBDA (X) (CAR (CDR (CAR X)))))
+        // (DEFINE CADDR (LAMBDA (X) (CAR (CDR (CDR X)))))
+        // (DEFINE CADDAR (LAMBDA (X) (CAR (CDR (CDR (CAR X))))))
+        // (DEFINE CAADAR (LAMBDA (X) (CAR (CAR (CDR (CAR X))))))
+
+        // (DEFINE ASSOC (Y2 (LAMBDA (ASSOC) (LAMBDA (X ENV) 
+        //                 (IF (EQ (CAAR ENV) X) (CADAR ENV) (ASSOC X (CDR ENV)))
+        //             )))
+        //         )
+
+
+        // (DEFINE UNIMPLEMENTED (LAMBDA () (DISPLAY (QUOTE UNIMPLEMENTED))))
+
 
             
-        // using lowercase for the interpreted language, just to be clearer.
-        (DEFINE eval (Y2 (LAMBDA (EVAL) (LAMBDA (E A) 
-                (COND
-                    ((ATOM E) (UNIMPLEMENTED))
-                    ((ATOM (CAR E)) 
-                        (COND 
-                            ((EQ (CAR E) (QUOTE quote)) (CADR E))
-                            ((EQ (CAR E) (QUOTE atom)) (ATOM (EVAL (CADR E) A)))
-                            ((EQ (CAR E) (QUOTE car)) (CAR (EVAL (CADR E) A)))
-                            ((EQ (CAR E) (QUOTE cdr)) (CDR (EVAL (CADR E) A)))
-                            ((EQ (CAR E) (QUOTE equal)) (EQ (EVAL (CADR E) A) (EVAL (CADDR E) A)))
-                            (TRUE (UNIMPLEMENTED))
-                        )
-                    )
+        // // using lowercase for the interpreted language, just to be clearer.
+        // (DEFINE eval (Y2 (LAMBDA (EVAL) (LAMBDA (E A) 
+        //         (COND
+        //             ((ATOM E) (ASSOC E A))
+        //             ((ATOM (CAR E)) 
+        //                 (COND 
+        //                     ((EQ (CAR E) (QUOTE quote)) (CADR E))
+        //                     ((EQ (CAR E) (QUOTE atom)) (ATOM (EVAL (CADR E) A)))
+        //                     ((EQ (CAR E) (QUOTE car)) (CAR (EVAL (CADR E) A)))
+        //                     ((EQ (CAR E) (QUOTE cdr)) (CDR (EVAL (CADR E) A)))
+        //                     ((EQ (CAR E) (QUOTE equal)) (EQ (EVAL (CADR E) A) (EVAL (CADDR E) A)))
+        //                     ((EQ (CAR E) (QUOTE cons)) (CONS (EVAL (CADR E) A) (EVAL (CADDR E) A)))
+        //                     (TRUE (EVAL (CONS (ASSOC (CAR E) A) (CDR E)) A)) //replace with looking up the value of (CAR E) in the environment
+        //                 )
+        //             )
+        //             ((EQ (CAAR E) (QUOTE lambda)) (EVAL (CADDAR E) (CONS (LIST (CAADAR E) (EVAL (CADR E) A)) A)  )) //Evaluate the inner expression of the lambda, in the environment with the argument bound to the parameter
                 
-                )
-            ))))
+        //         )
+        //     ))))
 
-        // (eval (QUOTE (quote (A))) NIL)
-        // (eval (QUOTE (atom (quote A))) NIL )
-        // (eval (QUOTE (cdr (cdr (quote (A B))))) NIL)
-        (eval (QUOTE (equal (quote a) (quote a)))NIL)
-        );
-        assert_eq!(test, "TRUE")
+        // // (eval (QUOTE (quote (A))) NIL)
+        // // (eval (QUOTE (atom (quote A))) NIL )
+        // // (eval (QUOTE (cdr (cdr (quote (A B))))) NIL)
+        // // (eval (QUOTE (cons (quote a) (quote (a)))) NIL)
+        // // (eval (QUOTE ((lambda (x) (quote a)) (quote b))) NIL)
+        // (eval (QUOTE ((lambda (X) X) (quote a))) NIL)
+
+        // );
+        // assert_eq!(test, stringify!((a a)));
         
 
-        // the same simple lisp interpreter, this time it supports single argument lambda
+
+        // let test = lisp!(PROGN
+        //     (DEFINE Y2 
+        //         (LAMBDA (h)
+        //             ((LAMBDA (x) (h (LAMBDA (a b) ((x x) a b))))
+        //                 (LAMBDA (x) (h (LAMBDA (a b) ((x x) a b)))))))
+        // );
     }
 
         

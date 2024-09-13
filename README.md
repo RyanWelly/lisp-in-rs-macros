@@ -19,6 +19,7 @@ lisp!(PROGN
 (DEFINE NOT (LAMBDA (X) (COND (X NIL) (TRUE TRUE))) )
 (DISPLAY (NOT NIL))
 ); // will print "hello there" and "TRUE"
+// "DISPLAY" forms first evaluate their arguments, then expand to a println!("{}", stringify!(evaled_argument))
 
 ```
 
@@ -140,7 +141,7 @@ lisp!(PROGN
 
         );
 ```
-It appears to work, but trying to evaluate `((lambda (X) X) (quote a))` in the interpreter takes more than 30 seconds and generates far more than 1 million+ tokens before cargo gets sigkilled. Using the explicit y combinator for recursion isn't particularly efficient here!
+It appears to work, but trying to evaluate `((lambda (X) X) (quote a))` in the interpreter takes more than 30 seconds and generates far more than 1 million+ tokens before cargo gets sigkilled. Using the explicit y combinator for recursion isn't particularly efficient here! To fix this, I should add an explicit recursion primitive. 
 
 
 

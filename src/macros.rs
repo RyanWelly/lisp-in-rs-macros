@@ -546,11 +546,7 @@ mod metacircular {
 // Desription of my lisp:
 
 // a simple LISP with lexical scoping, implemented fully in the Rust macro system.
-// Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda, let, display.
+// Avaliable primitives: atom, cons, eq, cons, car, cdr, lambda, let, display, apply, define.
 // NIL is a shorthand for the empty list, and the empty list also represents falsity. TRUE and every other value is truthy.
 // The define form is a bit weird in my lisp; (define name expr) evaluates expr and then binds it to name in the current env, so there's no restriction to
 // only using it at the top level like there is in Scheme. It does not allow recursive definitions, so use the Y combinator or similar fixpoint operators for recursion.
-
-// hopefully soon:  eval primitive, apply primitve, (recursive) define primitive.
-// maybe add macros?
-// for proof of concept, write a meta circular interpreter (ie just steal Graham's).

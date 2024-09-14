@@ -188,6 +188,14 @@ macro_rules! internal_lisp {
 
     // Deal with closures
 
+    // tail recursion (?) - if the last entry on the control stack is ap, then we don't save anything to the dump (because otherwise we'd be saving an state to the dump
+    // with an empty control, which would immediately get popped which reached anyway)
+    // TODO: test
+    (stack: [ [{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] ($($args_list_entry:tt)*) $($stacks:tt)*]  env: $env:tt control: [ap ] dump: $dump:tt) => {
+        internal_lisp!(stack: [] env: [$($vars : $args_list_entry )* $($key: $value)*] control: [$T] dump: $dump)
+        
+    };
+
 
     //errors if the number of vars is not the same as the number of arguments given.
     (stack: [ [{$($vars:ident)*}, $T:tt, [$($key:ident : $value:tt)*]] ($($args_list_entry:tt)*) $($stacks:tt)*]  env: $env:tt control: [ap $($controls:tt)*] dump: [$($dump:tt)*] ) => {

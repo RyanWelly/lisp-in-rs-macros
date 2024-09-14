@@ -116,6 +116,7 @@ macro_rules! internal_lisp {
 
     //quick dirty hack for fitting arguments into a list; add a new `cons` opcode, similar to the ap, which just cons the top two values on the stack.
     // (f a1 a2 a3) => NIL :: a1 :: {cons} :: a2 :: {cons} :: a3 :: {cons} :: f :: ap
+    // this has the massive advantage of making applying functions very straightforward; you don't need to slurp the right number of arguments off the stack.
     
     
     (stack: [ $x:tt () $($stacks:tt)*] env: $env:tt control: [{cons} $($rest:tt)*] dump: $dump:tt) => {
@@ -142,7 +143,6 @@ macro_rules! internal_lisp {
     };
 
     // DISPLAY
-    // TODO - prettify the printed output, especially for closures
     (stack: [__DISPLAY ($val:tt) $($stacks:tt)*] env: $env:tt control: [ap $($controls:tt)*] dump: $dump:tt) => {
         {println!("{}", prettify_lisp!($val));
         internal_lisp!(stack: [$val $($stacks)*] env: $env control: [$($controls)*] dump: $dump)}
@@ -232,8 +232,8 @@ macro_rules! prettify_lisp {
 // Helper error handler macro
 // either causes a compiler error with the error message, or evalutes program to a string of the error message. 
 macro_rules! error {
-    ($($toks:tt)+) => {compile_error!(stringify!($($toks)+))}; //program halts rust compilation with the error message
-    ($($toks:tt)*) => {println!("{}", stringify!($($toks)*))};  
+    ($($toks:tt)+) => {compile_error!(stringify!($($toks)+))}; // program halts rust compilation with the error message
+    ($($toks:tt)*) => {println!("{}", stringify!($($toks)*))}; // compilation continues, but lisp executation evaluates to a error string 
 
 }
 
@@ -328,8 +328,8 @@ mod tests {
     #[test]
     fn progn() {
         assert_eq!(lisp!(PROGN (QUOTE A) (QUOTE B)), stringify!(B));
-        let test = lisp!(PROGN (DEFINE A (QUOTE B)) (CONS A NIL)); // TODO: figure out why the define doesn't work, and A does not have a binding in the env.
-        dbg!(test);
+        let test = lisp!(PROGN (DEFINE A (QUOTE B)) (CONS A NIL)); 
+        assert_eq!(test, stringify!((B)));
     }
 
     #[test]
@@ -351,7 +351,8 @@ mod tests {
             "TRUE"
         );
 
-        dbg!(lisp!(IF (EQ NIL NIL) (QUOTE A) NIL));
+        assert_eq!(lisp!(IF (EQ NIL NIL) (QUOTE A) NIL), stringify!(A));
+
 
         // let test = lisp!(COND(EQ)); //incorrect forms will usually just fail with some kind of error. 
     }
@@ -435,11 +436,8 @@ mod tests {
             (APPEND (QUOTE (A)) (QUOTE (B C)))
             
         ); 
-        dbg!(test);
+        assert_eq!(test, stringify!((A B C)));
 
-        lisp!(PROGN
-        (DEFINE TEST NIL)
-        );
     }
 }
 
